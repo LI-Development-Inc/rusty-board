@@ -1,0 +1,9 @@
+[package]
+name = "rb-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rb-core = { path = "../rb-core" }
+askama = "0.12.1"
+serde.workspace = true

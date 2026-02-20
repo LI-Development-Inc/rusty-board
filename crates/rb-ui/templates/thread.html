@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="thread" id="t{{ thread.id }}">
+    {% for post in posts %}
+        <div class="post {% if post.is_op %}op{% else %}reply{% endif %}" id="p{{ post.id }}">
+            <div class="post-info">
+                <span class="subject">{{ thread.metadata.subject }}</span>
+                <span class="name">Anonymous</span>
+                <span class="tripcode">{{ post.metadata.tripcode }}</span>
+                <span class="uid">ID: {{ post.user_id_in_thread }}</span>
+                <span class="date">{{ post.created_at.format("%Y-%m-%d %H:%M:%S") }}</span>
+                <span class="reflink">
+                    <a href="#p{{ post.id }}">No.</a>{{ post.id }}
+                </span>
+            </div>
+
+            {% if let Some(media_id) = post.media_id %}
+            <div class="file">
+                <p class="file-info">File: <a href="{{ media_url }}{{ media_id }}">{{ media_id }}</a></p>
+                <a href="{{ media_url }}{{ media_id }}" target="_blank">
+                    <img src="{{ thumb_url }}{{ media_id }}" alt="Thumbnail" class="thumb">
+                </a>
+            </div>
+            {% endif %}
+
+            <blockquote class="post-body">
+                {{ post.content|safe }}
+            </blockquote>
+        </div>
+        <hr />
+    {% endfor %}
+</div>
+
+<div class="reply-form">
+    <h3>Post a Reply</h3>
+    <form action="/{{ board.slug }}/post" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="thread_id" value="{{ thread.id }}">
+        <textarea name="content" rows="5" cols="40" required></textarea><br />
+        <input type="file" name="file"><br />
+        <input type="submit" value="Post Reply">
+    </form>
+</div>
+{% endblock %}

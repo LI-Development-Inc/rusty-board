@@ -1,0 +1,60 @@
+.
+├── Cargo.toml                # Workspace manifest (Global dependencies & Features)
+├── README.md                 # Project overview and quick start
+├── .env                      # Local environment variables (DB_URL, etc.)
+├── .gitignore                # Rust-specific ignores (target/, .env, data/)
+│
+├── bin/                      # The "Glue" layer (Compiles into the actual app)
+│   └── rusty-board/
+│       ├── Cargo.toml
+│       └── src/
+│           └── main.rs       # Entry point: Orchestrates Traits into AppState
+│
+├── crates/                   # Core Logic and Presentation
+│   ├── rb-core/              # The "Contract" (Zero-IO, strictly domain logic)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── models.rs     # Structs: Board, Thread, Post, Ban
+│   │       ├── traits.rs     # Interfaces: BoardRepo, MediaStore, Auth
+│   │       └── error.rs      # Unified AppError handling
+│   │
+│   ├── rb-api/               # The "Nervous System" (Web Framework)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── handlers.rs   # Actix-web route logic & orchestration
+│   │       └── middleware.rs # Rate limiting, Logging, Security headers
+│   │
+│   └── rb-ui/                # The "Face" (Frontend)
+│       ├── Cargo.toml
+│       ├── src/
+│       │   └── lib.rs        # Askama template structs and View Models
+│       └── templates/        # Compiled HTML (Askama)
+│           ├── base.html
+│           ├── index.html
+│           └── thread.html
+│
+├── crates/rb-plugins/        # The "Adapters" (Infrastructure implementations)
+│   ├── rb-db-sqlite/         # SQLite persistence via SQLx
+│   │   ├── migrations/       # .sql migration files
+│   │   └── src/lib.rs
+│   │
+│   ├── rb-storage-local/     # Filesystem media storage
+│   │   └── src/lib.rs
+│   │
+│   └── rb-auth-simple/       # Argon2 identity and Tripcodes
+│       └── src/lib.rs
+│
+├── docs/                     # Project Documentation
+│   ├── VISION.md             # The "Why" (White Paper)
+│   ├── ARCHITECTURE.md       # The "How" (Design Docs)
+│   └── TECH_SPEC.md          # The "What" (Technical Specifications)
+│
+├── static/                   # Assets served by the web server
+│   ├── css/                  # Board styles
+│   └── js/                   # Progressive enhancement scripts
+│
+└── data/                     # Local development data (Ignored by Git)
+    ├── uploads/              # Sharded image storage
+    └── rusty_board.db        # Default SQLite database

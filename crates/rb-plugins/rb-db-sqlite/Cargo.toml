@@ -1,0 +1,18 @@
+[package]
+name = "rb-db-sqlite"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rb-core = { path = "../../rb-core" }
+sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid", "macros"] }
+uuid.workspace = true
+chrono.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+log = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }

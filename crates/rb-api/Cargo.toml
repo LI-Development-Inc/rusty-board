@@ -1,0 +1,16 @@
+[package]
+name = "rb-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rb-core = { path = "../rb-core" }
+rb-ui = { path = "../rb-ui" }
+actix-web = "4.0"
+actix-multipart = "0.6"
+futures-util = "0.3"
+html-escape = "0.2"
+serde.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+log = "0.4"

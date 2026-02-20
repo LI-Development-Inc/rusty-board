@@ -1,0 +1,32 @@
+[package]
+name = "rusty-board"
+version.workspace = true
+edition.workspace = true
+
+[features]
+# Only Enable what is built currently
+default = ["db-sqlite", "storage-local", "auth-simple"]
+
+db-sqlite = ["dep:rb-db-sqlite"]
+storage-local = ["dep:rb-storage-local"]
+auth-simple = ["dep:rb-auth-simple"]
+
+# Not implemented yet
+# storage-s3 = ["dep:rb-storage-s3"]
+# db-postgres = ["dep:rb-db-postgres"]
+
+[dependencies]
+rb-core = { path = "../../crates/rb-core" }
+rb-api = { path = "../../crates/rb-api" }
+
+# Optional dependencies triggered by features
+rb-db-sqlite = { path = "../../crates/rb-plugins/rb-db-sqlite", optional = true }
+rb-storage-local = { path = "../../crates/rb-plugins/rb-storage-local", optional = true }
+rb-auth-simple = { path = "../../crates/rb-plugins/rb-auth-simple", optional = true }
+
+# Web Stack
+actix-web = "4.0"
+env_logger = "0.10"
+log = "0.4"
+dotenv = "0.15"
+tokio = { version = "1.0", features = ["full"] }

@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rb-core",
+    "crates/rb-api",
+    "crates/rb-ui",
+    "crates/rb-plugins/rb-db-sqlite",
+    "crates/rb-plugins/rb-storage-local",
+    "bin/rusty-board"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Rusty-Board Team"]
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+# Shared Core Dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.7", features = ["v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+thiserror = "1.0"
+anyhow = "1.0"

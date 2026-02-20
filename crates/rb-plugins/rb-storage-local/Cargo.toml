@@ -1,0 +1,12 @@
+[package]
+name = "rb-storage-local"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rb-core = { path = "../../rb-core" }
+image = { version = "0.24", features = ["webp"] }
+sha2 = "0.10"
+tokio = { version = "1.0", features = ["fs", "io-util"] }
+async-trait.workspace = true
+anyhow.workspace = true
