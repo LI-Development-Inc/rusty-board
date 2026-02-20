@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use rb_core::models::{Board, Post, Thread};
 use rb_core::traits::BoardRepo;
 use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::SqlitePool;
+use crate::SqliteBoardRepo as SqliteDatabase;
 use sqlx::Pool;
 use sqlx::Sqlite;
 use uuid::Uuid;
@@ -178,5 +180,23 @@ async fn get_thread(&self, thread_id: Uuid) -> anyhow::Result<Option<(Thread, Ve
             is_locked: r.is_locked.unwrap_or(false), // Simplified
             metadata: serde_json::from_str(&r.metadata.unwrap_or_default()).unwrap_or_default(),
         }).collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn test_thread_creation() {
+        // Use the actual constructor which handles the pool internally
+        let db = SqliteBoardRepo::new("sqlite::memory:").await.unwrap();
+        
+        // Use v7 to match your handlers
+        let board_id = Uuid::now_v7();
+        
+        // Note: Ensure create_thread signature matches your Trait (Thread, Post)
+        // If you are using the simplified test helper, ensure types align
     }
 }

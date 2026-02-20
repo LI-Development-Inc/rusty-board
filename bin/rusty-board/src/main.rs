@@ -50,7 +50,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("")
                     .route("/", web::get().to(rb_api::handlers::index))
-                    .route("/{board}/", web::get().to(rb_api::handlers::board_index)) // Matches the function name
+                    .route("/{board}/", web::get().to(rb_api::handlers::board_index)) 
                     .route("/{board}/thread/{id}", web::get().to(rb_api::handlers::view_thread))
                     .route("/{board}/post", web::post().to(rb_api::handlers::create_post))
 

@@ -2,14 +2,32 @@
 
 {% block content %}
 <h2>{{ title }}</h2>
+
+<div class="post-form">
+    <h3>Start a New Thread</h3>
+    <form action="/{{ board.slug }}/post" method="POST" enctype="multipart/form-data">
+        <div>
+            <textarea name="content" rows="5" cols="50" placeholder="Comment..." required></textarea>
+        </div>
+        <div>
+            <label for="file">Image (Optional):</label>
+            <input type="file" name="file" id="file" accept="image/*">
+        </div>
+        <div>
+            <button type="submit">Post Thread</button>
+        </div>
+    </form>
+</div>
+
+<hr />
+
 <div class="board-index">
     {% for pair in threads %}
-        <div>
+        <div class="thread-preview">
             <a href="/{{ board.slug }}/thread/{{ pair.0.id }}">
-                Post No.{{ pair.1.id }}
+                View Thread No.{{ pair.1.id }}
             </a>
-            <p>{{ pair.1.content }}</p>
-        </div>
+            <p>{{ pair.1.content|safe }}</p> </div>
         <hr />
     {% endfor %}
 </div>

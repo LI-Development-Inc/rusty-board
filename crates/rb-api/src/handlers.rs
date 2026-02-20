@@ -4,9 +4,10 @@
 
 use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use actix_multipart::Multipart;
+use futures_util::stream::TryStreamExt; // Essential for .try_next() on Multipart and Fields
 use rb_core::models::{Post, Thread};
 use rb_core::traits::{BoardRepo, MediaStore, AuthProvider};
-use rb_ui::{IndexTemplate, ThreadTemplate}; // Import your templates
+use rb_ui::{IndexTemplate, ThreadTemplate};
 use askama::Template;
 use uuid::Uuid;
 use chrono::Utc;
@@ -22,62 +23,91 @@ pub struct AppState {
 pub async fn create_post(
     data: web::Data<AppState>,
     req: HttpRequest,
-    _form: Multipart, // Multi-part for file uploads
+    mut payload: Multipart, 
 ) -> impl Responder {
     let client_ip = req.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+    
+    let mut content = String::new();
+    let mut image_bytes: Option<Vec<u8>> = None;
+    let mut content_type = String::new();
 
-    // 1. Security Check: Is the IP banned?
+    // 1. Process the Multipart Stream
+    // We use try_next() from TryStreamExt to iterate over fields
+    while let Ok(Some(mut field)) = payload.try_next().await {
+        let name = field.name().to_string();
+
+        if name == "content" {
+            // Collect text chunks into a String
+            while let Ok(Some(chunk)) = field.try_next().await {
+                content.push_str(std::str::from_utf8(&chunk).unwrap_or_default());
+            }
+        } else if name == "file" {
+            // Collect binary chunks into a Vec<u8>
+            content_type = field.content_type().map(|m| m.to_string()).unwrap_or_default();
+            let mut bytes = Vec::new();
+            while let Ok(Some(chunk)) = field.try_next().await {
+                bytes.extend_from_slice(&chunk);
+            }
+            if !bytes.is_empty() {
+                image_bytes = Some(bytes);
+            }
+        }
+    }
+
+    // 2. Security Check: Is the IP banned?
     if let Ok(true) = data.auth.check_ban(&client_ip).await {
         return HttpResponse::Forbidden().body("You are banned.");
     }
 
-    // 2. Logic: Process multipart form (simplified for brevity)
-    // TODO: Implement a robust multipart parser to extract content and files
-    let content = "User post content".to_string(); 
-    let thread_id: Option<Uuid> = None; // None means new thread
-
     // 3. Media: Process image if present
-    let media_id = if let Some(file_bytes) = Some(vec![]) { // Placeholder
-        match data.store.save_upload(file_bytes, "image/jpeg").await {
+    let media_id = if let Some(bytes) = image_bytes {
+        match data.store.save_upload(bytes, &content_type).await {
             Ok(id) => Some(id),
-            Err(_) => return HttpResponse::InternalServerError().finish(),
+            Err(_) => return HttpResponse::InternalServerError().body("Failed to save media"),
         }
     } else {
         None
     };
 
-    // 4. Identity: Generate Tripcode and Thread ID
-    let thread_target = thread_id.unwrap_or_else(Uuid::now_v7);
+    // 4. Identity: Generate Thread-specific ID (Tripcode-like)
+    let thread_target = Uuid::now_v7();
     let user_id = data.auth.generate_thread_id(&client_ip, &thread_target.to_string());
 
-    // 5. Persistence: Save to DB
+    // 5. Context: Get Board ID from the URL slug
+    let board_slug = req.match_info().get("board").unwrap_or("b");
+    let board = match data.repo.get_board(board_slug).await {
+        Ok(Some(b)) => b,
+        _ => return HttpResponse::NotFound().finish(),
+    };
+
+    // 6. Persistence: Save to DB
     let new_post = Post {
         id: Uuid::now_v7(),
         thread_id: thread_target,
         user_id_in_thread: user_id,
         content: sanitize_content(&content),
         media_id,
-        is_op: thread_id.is_none(),
+        is_op: true, // Currently handles new thread creation
         created_at: Utc::now(),
         metadata: serde_json::json!({}),
     };
 
-    if thread_id.is_none() {
-        let new_thread = Thread {
-            id: thread_target,
-            board_id: Uuid::nil(), // Placeholder for board context
-            last_bump: Utc::now(),
-            is_sticky: false,
-            is_locked: false,
-            metadata: serde_json::json!({}),
-        };
-        data.repo.create_thread(new_thread, new_post).await.unwrap();
-    } else {
-        data.repo.create_post(new_post).await.unwrap();
+    let new_thread = Thread {
+        id: thread_target,
+        board_id: board.id,
+        last_bump: Utc::now(),
+        is_sticky: false,
+        is_locked: false,
+        metadata: serde_json::json!({}),
+    };
+
+    if let Err(e) = data.repo.create_thread(new_thread, new_post).await {
+        log::error!("Database error: {:?}", e);
+        return HttpResponse::InternalServerError().finish();
     }
 
     HttpResponse::SeeOther()
-        .insert_header(("Location", format!("/thread/{}", thread_target)))
+        .insert_header(("Location", format!("/{}/thread/{}", board_slug, thread_target)))
         .finish()
 }
 
@@ -88,13 +118,10 @@ pub async fn board_index(
 ) -> impl Responder {
     let board_slug = path.into_inner();
     
-    // 1. Fetch board and its threads from repo
     match data.repo.get_board(&board_slug).await {
         Ok(Some(board)) => {
-            // Get threads for this board (you might need a get_threads method in your trait)
             let threads = data.repo.get_threads_by_board(board.id).await.unwrap_or_default();
             
-            // 2. Render via rb-ui Askama Template
             let html = IndexTemplate {
                 board: &board,
                 threads: &threads,
@@ -123,13 +150,12 @@ pub async fn view_thread(
 
     match data.repo.get_thread(thread_id).await {
         Ok(Some((thread, posts))) => {
-            // 3. Render via rb-ui Askama Template
             let html = ThreadTemplate {
                 board: &board,
                 thread: &thread,
                 posts: &posts,
                 title: format!("Thread #{} - / {} /", thread.id, board.slug),
-                media_url: "/static/uploads/".to_string(), // Adjust as needed
+                media_url: "/static/uploads/".to_string(),
                 thumb_url: "/static/uploads/thumbs/".to_string(),
             }
             .render()
@@ -141,18 +167,13 @@ pub async fn view_thread(
     }
 }
 
-/// Optional: A simple homepage handler for "/"
 pub async fn index(_data: web::Data<AppState>) -> impl Responder {
     HttpResponse::Ok().body("Welcome to Rusty-Board! Try going to /b/")
 }
 
-
-/// Basic sanitization and "Greentext" transformation.
 fn sanitize_content(raw: &str) -> String {
-    // Escape HTML to prevent XSS
     let escaped = html_escape::encode_safe(raw).to_string();
     
-    // Simple Greentext: lines starting with '>' become green
     escaped.lines()
         .map(|line| {
             if line.starts_with("&gt;") {
