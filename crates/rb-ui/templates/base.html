@@ -1,22 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{{ title }}{% endblock %} - Rusty-Board</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>{{ title }}</title>
 </head>
 <body>
-    <header>
-        <h1><a href="/">/{{ board.slug }}/ - {{ board.title }}</a></h1>
-        <p class="description">{{ board.description }}</p>
-    </header>
-    <hr />
-    <main>
-        {% block content %}{% endblock %}
-    </main>
-    <footer>
-        <p>Powered by 🦀 Rusty-Board</p>
-    </footer>
+    {% block content %}{% endblock %}
 </body>
 </html>

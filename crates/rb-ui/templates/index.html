@@ -1,29 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Board Index{% endblock %}
-
 {% block content %}
+<h2>{{ title }}</h2>
 <div class="board-index">
-    <h2>Available Threads</h2>
-    <div class="thread-list">
-        {% for (thread, op_post) in threads %}
-            <div class="thread-preview">
-                <a href="/{{ board.slug }}/thread/{{ thread.id }}">
-                    [View Thread]
-                </a>
-                <span class="teaser">{{ op_post.content|truncate(100) }}</span>
-            </div>
-            <hr />
-        {% endfor %}
-    </div>
-</div>
-
-<div class="new-thread-form">
-    <h3>Start a New Thread</h3>
-    <form action="/{{ board.slug }}/post" method="post" enctype="multipart/form-data">
-        <textarea name="content" placeholder="Thread content..." required></textarea><br />
-        <input type="file" name="file"><br />
-        <input type="submit" value="Create Thread">
-    </form>
+    {% for pair in threads %}
+        <div>
+            <a href="/{{ board.slug }}/thread/{{ pair.0.id }}">
+                Post No.{{ pair.1.id }}
+            </a>
+            <p>{{ pair.1.content }}</p>
+        </div>
+        <hr />
+    {% endfor %}
 </div>
 {% endblock %}

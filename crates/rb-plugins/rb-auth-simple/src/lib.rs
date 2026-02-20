@@ -4,13 +4,17 @@
 //! Handles secure tripcodes, staff authentication, and ephemeral thread IDs.
 
 use async_trait::async_trait;
+use base64::Engine;
 use rb_core::traits::AuthProvider;
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{PasswordHash, PasswordVerifier},
     Argon2,
 };
+// Removed from above for warnings: rand_core::OsRng, PasswordHasher, SaltString
 use sha2::{Sha256, Digest};
-use std::net::IpAddr;
+
+// commented out for now to avoid warnings:
+// use std::net::IpAddr;
 
 pub struct SimpleAuthProvider {
     /// Secret salt for generating ephemeral Thread IDs (rotates on restart for security)
@@ -18,11 +22,10 @@ pub struct SimpleAuthProvider {
 }
 
 impl SimpleAuthProvider {
-    pub fn new() -> Self {
-        let mut bytes = [0u8; 32];
-        getrandom::getrandom(&mut bytes).expect("Failed to seed session salt");
+    /// Accepts a salt string (e.g., from an environment variable)
+    pub fn new(salt: &str) -> Self {
         Self {
-            session_salt: hex::encode(bytes),
+            session_salt: salt.to_string(),
         }
     }
 }
@@ -48,7 +51,7 @@ impl AuthProvider for SimpleAuthProvider {
         hasher.update(password.as_bytes());
         // Use a static internal salt for standard tripcodes to match logic
         // or a dynamic one for "Secure Tripcodes".
-        let result = base64::encode(hasher.finalize());
+        let result = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
         format!("!{}", &result[..10])
     }
 
@@ -65,7 +68,7 @@ impl AuthProvider for SimpleAuthProvider {
 
     /// Checks for a ban. In this Lite plugin, we assume a simple IP-based check.
     /// Full logic would query the BanRepo (implemented in the DB plugin).
-    async fn check_ban(&self, ip: &str) -> anyhow::Result<bool> {
+    async fn check_ban(&self, _ip: &str) -> anyhow::Result<bool> {
         // TODO: Integrate with BoardRepo/BanRepo logic
         Ok(false)
     }

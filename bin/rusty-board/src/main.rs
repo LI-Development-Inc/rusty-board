@@ -1,12 +1,8 @@
-//! # Rusty-Board Binary
-//! 
-//! The entry point that assembles the application based on compile-time features.
-
 use actix_web::{web, App, HttpServer};
-use rb_api::handlers::{handle_post, AppState};
 use std::sync::Arc;
+use rb_api::handlers::AppState;
 
-// Feature-gated imports: This is the "Compiled-to-Order" magic
+// 1. Feature-gated imports
 #[cfg(feature = "db-sqlite")]
 use rb_db_sqlite::SqliteBoardRepo;
 
@@ -21,27 +17,28 @@ async fn main() -> std::io::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    // 1. Initialize Database Implementation
+    // 2. Initialize Implementations with proper scoping
+    // Note: We use Box::new because AppState expects Box<dyn Trait>
+    
     #[cfg(feature = "db-sqlite")]
-    let repo = SqliteBoardRepo::new("sqlite:rusty_board.db").await
-        .expect("Failed to init SQLite");
+    let repo = Box::new(SqliteBoardRepo::new("sqlite:rusty_board.db").await
+        .expect("Failed to init SQLite"));
 
-    // 2. Initialize Storage Implementation
     #[cfg(feature = "storage-local")]
-    let store = LocalMediaStore::new(
+    let store = Box::new(LocalMediaStore::new(
         "./data/uploads".into(), 
         "/static/uploads".into()
-    );
+    ));
 
-    // 3. Initialize Auth Implementation
     #[cfg(feature = "auth-simple")]
-    let auth = SimpleAuthProvider::new();
+    let auth = Box::new(SimpleAuthProvider::new("your-secret-salt"));
 
-    // 4. Wrap in AppState (Using dynamic dispatch for maximum flexibility)
+    // 3. Wrap in AppState
+    // We use Arc to make the AppState sharable across Actix threads
     let state = web::Data::new(AppState {
-        repo: Box::new(repo),
-        store: Box::new(store),
-        auth: Box::new(auth),
+        repo,
+        store,
+        auth,
     });
 
     log::info!("🚀 Rusty-Board starting on http://127.0.0.1:8080");
@@ -49,8 +46,16 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
-            .service(web::resource("/{board}/post").route(web::post().to(handle_post)))
-            // TODO: Add index and thread view routes
+            // Register your routes here
+            .service(
+                web::scope("")
+                    .route("/", web::get().to(rb_api::handlers::index))
+                    .route("/{board}/", web::get().to(rb_api::handlers::board_index)) // Matches the function name
+                    .route("/{board}/thread/{id}", web::get().to(rb_api::handlers::view_thread))
+                    .route("/{board}/post", web::post().to(rb_api::handlers::create_post))
+
+                    // Add your other routes once handlers are ready
+            )
     })
     .bind(("127.0.0.1", 8080))?
     .run()

@@ -17,7 +17,8 @@ pub trait BoardRepo: Send + Sync {
     async fn create_thread(&self, thread: Thread, initial_post: Post) -> anyhow::Result<()>;
     async fn get_thread(&self, id: Uuid) -> anyhow::Result<Option<(Thread, Vec<Post>)>>;
     async fn list_threads_paginated(&self, board_id: Uuid, limit: i64, offset: i64) -> anyhow::Result<Vec<Thread>>;
-
+    async fn get_threads_by_board(&self, board_id: Uuid) -> anyhow::Result<Vec<(Thread, Post)>>;
+    
     // Post Operations
     async fn create_post(&self, post: Post) -> anyhow::Result<()>;
     

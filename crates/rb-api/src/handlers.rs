@@ -2,9 +2,12 @@
 //! 
 //! This module coordinates the flow between HTTP requests and Core traits.
 
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
+use actix_multipart::Multipart;
 use rb_core::models::{Post, Thread};
 use rb_core::traits::{BoardRepo, MediaStore, AuthProvider};
+use rb_ui::{IndexTemplate, ThreadTemplate}; // Import your templates
+use askama::Template;
 use uuid::Uuid;
 use chrono::Utc;
 
@@ -16,11 +19,11 @@ pub struct AppState {
 }
 
 /// Orchestrates the creation of a new post or thread.
-pub async fn handle_post(
+pub async fn create_post(
     data: web::Data<AppState>,
     req: HttpRequest,
-    form: web::Multipart, // Multi-part for file uploads
-) -> HttpResponse {
+    _form: Multipart, // Multi-part for file uploads
+) -> impl Responder {
     let client_ip = req.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
 
     // 1. Security Check: Is the IP banned?
@@ -78,6 +81,72 @@ pub async fn handle_post(
         .finish()
 }
 
+/// Renders the Board Index (e.g., /b/)
+pub async fn board_index(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let board_slug = path.into_inner();
+    
+    // 1. Fetch board and its threads from repo
+    match data.repo.get_board(&board_slug).await {
+        Ok(Some(board)) => {
+            // Get threads for this board (you might need a get_threads method in your trait)
+            let threads = data.repo.get_threads_by_board(board.id).await.unwrap_or_default();
+            
+            // 2. Render via rb-ui Askama Template
+            let html = IndexTemplate {
+                board: &board,
+                threads: &threads,
+                title: format!("/ {} / - {}", board.slug, board.title),
+            }
+            .render()
+            .expect("Template rendering failed");
+
+            HttpResponse::Ok().content_type("text/html").body(html)
+        }
+        _ => HttpResponse::NotFound().finish(),
+    }
+}
+
+/// Renders a specific Thread (e.g., /b/thread/<uuid>)
+pub async fn view_thread(
+    data: web::Data<AppState>,
+    path: web::Path<(String, Uuid)>,
+) -> impl Responder {
+    let (board_slug, thread_id) = path.into_inner();
+
+    let board = match data.repo.get_board(&board_slug).await {
+        Ok(Some(b)) => b,
+        _ => return HttpResponse::NotFound().finish(),
+    };
+
+    match data.repo.get_thread(thread_id).await {
+        Ok(Some((thread, posts))) => {
+            // 3. Render via rb-ui Askama Template
+            let html = ThreadTemplate {
+                board: &board,
+                thread: &thread,
+                posts: &posts,
+                title: format!("Thread #{} - / {} /", thread.id, board.slug),
+                media_url: "/static/uploads/".to_string(), // Adjust as needed
+                thumb_url: "/static/uploads/thumbs/".to_string(),
+            }
+            .render()
+            .expect("Template rendering failed");
+
+            HttpResponse::Ok().content_type("text/html").body(html)
+        }
+        _ => HttpResponse::NotFound().finish(),
+    }
+}
+
+/// Optional: A simple homepage handler for "/"
+pub async fn index(_data: web::Data<AppState>) -> impl Responder {
+    HttpResponse::Ok().body("Welcome to Rusty-Board! Try going to /b/")
+}
+
+
 /// Basic sanitization and "Greentext" transformation.
 fn sanitize_content(raw: &str) -> String {
     // Escape HTML to prevent XSS
@@ -94,36 +163,4 @@ fn sanitize_content(raw: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("<br />")
-}
-
-pub async fn view_board_index(
-    data: web::Data<AppState>,
-    path: web::Path<String>,
-) -> HttpResponse {
-    let board_slug = path.into_inner();
-    
-    // 1. Fetch board from repo
-    match data.repo.get_board(&board_slug).await {
-        Ok(Some(board)) => {
-            // 2. Render index via rb-ui (Askama)
-            // Placeholder: In real use, you'd call IndexTemplate { .. }.render()
-            HttpResponse::Ok().body(format!("Welcome to / {} /", board.slug))
-        }
-        _ => HttpResponse::NotFound().finish(),
-    }
-}
-
-pub async fn view_thread(
-    data: web::Data<AppState>,
-    path: web::Path<(String, Uuid)>,
-) -> HttpResponse {
-    let (_board_slug, thread_id) = path.into_inner();
-
-    match data.repo.get_thread(thread_id).await {
-        Ok(Some((thread, posts))) => {
-            // 3. Render thread via rb-ui (Askama)
-            HttpResponse::Ok().body(format!("Thread {}: {} posts", thread.id, posts.len()))
-        }
-        _ => HttpResponse::NotFound().finish(),
-    }
 }
