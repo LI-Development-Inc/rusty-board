@@ -2,6 +2,21 @@
 
 {% block content %}
 <h2>{{ title }}</h2>
+
+<div class="reply-form">
+    <h3>Post a Reply</h3>
+    <form action="/{{ board.slug }}/post" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="thread_id" value="{{ thread.id }}">
+        <div>
+            <textarea name="content" rows="4" cols="50" required></textarea>
+        </div>
+        <div>
+            <input type="file" name="file" accept="image/*">
+            <button type="submit">Post Reply</button>
+        </div>
+    </form>
+</div>
+
 <div class="thread">
     {% for post in posts %}
         <div class="post">

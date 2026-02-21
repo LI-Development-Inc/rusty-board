@@ -4,7 +4,7 @@
 
 use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use actix_multipart::Multipart;
-use futures_util::stream::TryStreamExt; // Essential for .try_next() on Multipart and Fields
+use futures_util::stream::TryStreamExt;
 use rb_core::models::{Post, Thread};
 use rb_core::traits::{BoardRepo, MediaStore, AuthProvider};
 use rb_ui::{IndexTemplate, ThreadTemplate};
@@ -30,27 +30,37 @@ pub async fn create_post(
     let mut content = String::new();
     let mut image_bytes: Option<Vec<u8>> = None;
     let mut content_type = String::new();
+    let mut thread_id_from_form: Option<Uuid> = None;
 
-    // 1. Process the Multipart Stream
-    // We use try_next() from TryStreamExt to iterate over fields
+    // 1. Process Multipart Stream
     while let Ok(Some(mut field)) = payload.try_next().await {
         let name = field.name().to_string();
 
-        if name == "content" {
-            // Collect text chunks into a String
-            while let Ok(Some(chunk)) = field.try_next().await {
-                content.push_str(std::str::from_utf8(&chunk).unwrap_or_default());
-            }
-        } else if name == "file" {
-            // Collect binary chunks into a Vec<u8>
-            content_type = field.content_type().map(|m| m.to_string()).unwrap_or_default();
-            let mut bytes = Vec::new();
-            while let Ok(Some(chunk)) = field.try_next().await {
-                bytes.extend_from_slice(&chunk);
-            }
-            if !bytes.is_empty() {
-                image_bytes = Some(bytes);
-            }
+        match name.as_str() {
+            "content" => {
+                while let Ok(Some(chunk)) = field.try_next().await {
+                    content.push_str(std::str::from_utf8(&chunk).unwrap_or_default());
+                }
+            },
+            "thread_id" => {
+                while let Ok(Some(chunk)) = field.try_next().await {
+                    let id_str = std::str::from_utf8(&chunk).unwrap_or_default();
+                    if let Ok(id) = Uuid::parse_str(id_str) {
+                        thread_id_from_form = Some(id);
+                    }
+                }
+            },
+            "file" => {
+                content_type = field.content_type().map(|m| m.to_string()).unwrap_or_default();
+                let mut bytes = Vec::new();
+                while let Ok(Some(chunk)) = field.try_next().await {
+                    bytes.extend_from_slice(&chunk);
+                }
+                if !bytes.is_empty() {
+                    image_bytes = Some(bytes);
+                }
+            },
+            _ => {}
         }
     }
 
@@ -63,49 +73,60 @@ pub async fn create_post(
     let media_id = if let Some(bytes) = image_bytes {
         match data.store.save_upload(bytes, &content_type).await {
             Ok(id) => Some(id),
-            Err(_) => return HttpResponse::InternalServerError().body("Failed to save media"),
+            Err(e) => {
+                log::error!("Media storage error: {:?}", e);
+                return HttpResponse::InternalServerError().body("Failed to save media");
+            }
         }
     } else {
         None
     };
 
-    // 4. Identity: Generate Thread-specific ID (Tripcode-like)
-    let thread_target = Uuid::now_v7();
-    let user_id = data.auth.generate_thread_id(&client_ip, &thread_target.to_string());
-
-    // 5. Context: Get Board ID from the URL slug
+    // 4. Identify Context
     let board_slug = req.match_info().get("board").unwrap_or("b");
     let board = match data.repo.get_board(board_slug).await {
         Ok(Some(b)) => b,
         _ => return HttpResponse::NotFound().finish(),
     };
 
-    // 6. Persistence: Save to DB
+    let is_new_thread = thread_id_from_form.is_none();
+    let thread_target = thread_id_from_form.unwrap_or_else(Uuid::now_v7);
+    let user_id = data.auth.generate_thread_id(&client_ip, &thread_target.to_string());
+
+    // 5. Create Post Model
     let new_post = Post {
         id: Uuid::now_v7(),
         thread_id: thread_target,
         user_id_in_thread: user_id,
         content: sanitize_content(&content),
         media_id,
-        is_op: true, // Currently handles new thread creation
+        is_op: is_new_thread,
         created_at: Utc::now(),
         metadata: serde_json::json!({}),
     };
 
-    let new_thread = Thread {
-        id: thread_target,
-        board_id: board.id,
-        last_bump: Utc::now(),
-        is_sticky: false,
-        is_locked: false,
-        metadata: serde_json::json!({}),
-    };
-
-    if let Err(e) = data.repo.create_thread(new_thread, new_post).await {
-        log::error!("Database error: {:?}", e);
-        return HttpResponse::InternalServerError().finish();
+    // 6. Persistence Logic
+    if is_new_thread {
+        let new_thread = Thread {
+            id: thread_target,
+            board_id: board.id,
+            last_bump: Utc::now(),
+            is_sticky: false,
+            is_locked: false,
+            metadata: serde_json::json!({}),
+        };
+        if let Err(e) = data.repo.create_thread(new_thread, new_post).await {
+            log::error!("DB Error (Thread): {:?}", e);
+            return HttpResponse::InternalServerError().finish();
+        }
+    } else {
+        if let Err(e) = data.repo.create_post(new_post).await {
+            log::error!("DB Error (Post): {:?}", e);
+            return HttpResponse::InternalServerError().finish();
+        }
     }
 
+    // Redirect to the thread view
     HttpResponse::SeeOther()
         .insert_header(("Location", format!("/{}/thread/{}", board_slug, thread_target)))
         .finish()
