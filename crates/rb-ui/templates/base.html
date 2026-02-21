@@ -2,8 +2,16 @@
 <html>
 <head>
     <title>{{ title }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; line-height: 1.4; }
+        .post { margin-bottom: 1em; padding: 0.5em; }
+        .post-media img { border: 1px solid #ccc; padding: 5px; background: #f9f9f9; }
+        .reply-form { background: #eee; padding: 1em; border-radius: 5px; }
+    </style>
 </head>
 <body>
+    <h1><a href="/" style="text-decoration: none; color: black;">rusty-board</a></h1>
+    <hr>
     {% block content %}{% endblock %}
 </body>
 </html>

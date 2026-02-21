@@ -1,41 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>{{ title }}</h2>
+<h2>Thread #{{ thread.id }} - / {{ board.slug }} /</h2>
 
 <div class="reply-form">
-    <h3>Post a Reply</h3>
     <form action="/{{ board.slug }}/post" method="POST" enctype="multipart/form-data">
         <input type="hidden" name="thread_id" value="{{ thread.id }}">
-        <div>
-            <textarea name="content" rows="4" cols="50" required></textarea>
-        </div>
-        <div>
-            <input type="file" name="file" accept="image/*">
-            <button type="submit">Post Reply</button>
-        </div>
+        <textarea name="content" rows="3" cols="40" placeholder="Reply content..." required></textarea><br>
+        <input type="file" name="file" accept="image/*"><br>
+        <button type="submit">Post Reply</button>
     </form>
 </div>
+<hr>
 
 <div class="thread">
     {% for post in posts %}
-        <div class="post">
-            <span>No.{{ post.id }}</span>
-            
-            {# Correct way to handle Option<String> in Askama #}
-            {% if post.media_id.is_some() %}
+    <div class="post" id="p{{ post.id }}">
+        <span style="font-weight: bold;">No.{{ post.id }}</span>
+        
+        {# Changed to if let to handle Option<String> correctly #}
+        {% if let Some(mid) = post.media_id %}
+            {% if mid.len() > 4 %}
                 <div class="post-media">
-                    <img src="/static/uploads/{{ post.media_id.as_ref().unwrap() }}" style="max-width: 200px;">
+                    <a href="/static/uploads/{{ mid[..2] }}/{{ mid[2..4] }}/{{ mid }}" target="_blank">
+                        <img src="/static/uploads/{{ mid[..2] }}/{{ mid[2..4] }}/thumb_{{ mid }}.webp" 
+                            style="max-width: 250px; border: 1px solid #ccc;"
+                            alt="Image">
+                    </a>
                 </div>
-            {% endif %}
+            {% else %}
+                {% endif %}
+        {% endif %}
 
-            <p>{{ post.content|safe }}</p>
-            
-            {% if !post.user_id_in_thread.is_empty() %}
-                <span>ID: {{ post.user_id_in_thread }}</span>
-            {% endif %}
-        </div>
-        <hr />
+        <p>{{ post.content|safe }}</p>
+    </div>
+    <hr />
     {% endfor %}
 </div>
 {% endblock %}

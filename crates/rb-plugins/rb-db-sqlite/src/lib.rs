@@ -110,7 +110,10 @@ async fn get_thread(&self, thread_id: Uuid) -> anyhow::Result<Option<(Thread, Ve
                 thread_id: Uuid::from_slice(&pr.thread_id).unwrap_or_default(),
                 user_id_in_thread: pr.user_id_in_thread.unwrap_or_else(|| "Anonymous".to_string()),
                 content: pr.content,
-                media_id: pr.media_id.map(|m| Uuid::from_slice(&m).map(|u| u.to_string()).unwrap_or_default()),
+                media_id: pr.media_id.and_then(|m| {
+                    let s = String::from_utf8_lossy(&m).to_string();
+                    if s.is_empty() { None } else { Some(s) }
+                }),                
                 is_op: pr.is_op.unwrap_or(false), // Simplified
                 created_at: pr.created_at.map(|dt| dt.and_utc()).unwrap_or_else(Utc::now),
                 metadata: serde_json::from_str(&pr.metadata.unwrap_or_default()).unwrap_or_default(),
@@ -150,7 +153,10 @@ async fn get_thread(&self, thread_id: Uuid) -> anyhow::Result<Option<(Thread, Ve
                 thread_id: Uuid::from_slice(&row.p_thread_id).unwrap_or_default(),
                 user_id_in_thread: row.p_user_id.unwrap_or_else(|| "Anonymous".to_string()),
                 content: row.p_content,
-                media_id: row.p_media.map(|m| Uuid::from_slice(&m).map(|u| u.to_string()).unwrap_or_default()),
+                media_id: row.p_media.and_then(|m| {
+                    let s = String::from_utf8_lossy(&m).to_string();
+                    if s.is_empty() { None } else { Some(s) }
+                    }),
                 is_op: row.p_is_op.unwrap_or(false), // Simplified
                 created_at: row.p_created.map(|dt| dt.and_utc()).unwrap_or_else(Utc::now),
                 metadata: serde_json::from_str(&row.p_meta.unwrap_or_default()).unwrap_or_default(),
