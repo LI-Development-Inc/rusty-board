@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .catalog-grid { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+    .catalog-item { width: 200px; border: 1px solid #ddd; padding: 10px; text-align: center; }
+    .catalog-thumb img { max-width: 150px; height: auto; }
+</style>
+
+<h2>Catalog - /{{ board.slug }}/</h2>
+
+<div class="catalog-grid">
+    {% for pair in threads %}
+    <div class="catalog-item">
+        <a href="/{{ board.slug }}/thread/{{ pair.0.id }}">
+            {% if let Some(mid) = pair.1.media_id %}
+                {% if mid.len() > 4 %}
+                <div class="catalog-thumb">
+                    <img src="/static/uploads/{{ mid[..2] }}/{{ mid[2..4] }}/thumb_{{ mid }}.webp">
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="no-image">No Image</div>
+            {% endif %}
+        </a>
+        <p>{{ pair.1.content|truncate(50)|safe }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

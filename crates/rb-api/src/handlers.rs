@@ -7,7 +7,7 @@ use actix_multipart::Multipart;
 use futures_util::stream::TryStreamExt;
 use rb_core::models::{Post, Thread};
 use rb_core::traits::{BoardRepo, MediaStore, AuthProvider};
-use rb_ui::{IndexTemplate, ThreadTemplate};
+use rb_ui::{IndexTemplate, ThreadTemplate, CatalogTemplate};
 use askama::Template;
 use uuid::Uuid;
 use chrono::Utc;
@@ -155,6 +155,26 @@ pub async fn board_index(
         }
         _ => HttpResponse::NotFound().finish(),
     }
+}
+
+// Renders the Catalog view for a Board (e.g., /b/catalog)
+pub async fn get_catalog(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let slug = path.into_inner();
+    let board = data.repo.get_board(&slug).await.unwrap().unwrap();
+    let threads = data.repo.get_threads_by_board(board.id).await.unwrap();
+
+    let s = CatalogTemplate {
+        board: &board,
+        threads: &threads,
+        title: format!("/{}/ - Catalog", slug),
+    }
+    .render()
+    .unwrap();
+
+    HttpResponse::Ok().content_type("text/html").body(s)
 }
 
 /// Renders a specific Thread (e.g., /b/thread/<uuid>)

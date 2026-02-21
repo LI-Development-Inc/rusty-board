@@ -20,3 +20,11 @@ pub struct ThreadTemplate<'a> {
     pub media_url: String,
     pub thumb_url: String,
 }
+
+#[derive(Template)]
+#[template(path = "catalog.html")]
+pub struct CatalogTemplate<'a> {
+    pub board: &'a Board,
+    pub threads: &'a Vec<(Thread, Post)>,
+    pub title: String,
+}

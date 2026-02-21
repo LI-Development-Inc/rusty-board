@@ -56,6 +56,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/{board}/", web::get().to(rb_api::handlers::board_index)) 
                     .route("/{board}/thread/{id}", web::get().to(rb_api::handlers::view_thread))
                     .route("/{board}/post", web::post().to(rb_api::handlers::create_post))
+                    .route("/{board}/catalog", web::get().to(rb_api::handlers::get_catalog))
 
                     // Add your other routes once handlers are ready
             )
