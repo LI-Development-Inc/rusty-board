@@ -47,11 +47,11 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
+            .service(Files::new("/static/uploads", "./data/uploads").show_files_listing())
+            .service(Files::new("/static", "static").show_files_listing())
             // Register your routes here
             .service(
                 web::scope("")
-                    .service(Files::new("/static/uploads", "./data/uploads").show_files_listing())
-
                     .route("/", web::get().to(rb_api::handlers::index))
                     .route("/{board}/", web::get().to(rb_api::handlers::board_index)) 
                     .route("/{board}/thread/{id}", web::get().to(rb_api::handlers::view_thread))

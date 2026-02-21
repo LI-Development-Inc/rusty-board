@@ -41,3 +41,17 @@ header h1 { font-size: 2em; margin: 0; }
     margin-top: 20px;
     width: fit-content;
 }
+
+/* Image Sharding Display */
+.post-media img, .thumb img {
+    border: 1px solid #aaa;
+    background-color: #eee;
+}
+
+/* Catalog Grid */
+.catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
