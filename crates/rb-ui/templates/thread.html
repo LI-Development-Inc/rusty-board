@@ -21,9 +21,16 @@
     {% for post in posts %}
         <div class="post">
             <span>No.{{ post.id }}</span>
-            <p>{{ post.content }}</p>
             
-            {# Change is_some() to !.is_empty() or just remove the check #}
+            {# Correct way to handle Option<String> in Askama #}
+            {% if post.media_id.is_some() %}
+                <div class="post-media">
+                    <img src="/static/uploads/{{ post.media_id.as_ref().unwrap() }}" style="max-width: 200px;">
+                </div>
+            {% endif %}
+
+            <p>{{ post.content|safe }}</p>
+            
             {% if !post.user_id_in_thread.is_empty() %}
                 <span>ID: {{ post.user_id_in_thread }}</span>
             {% endif %}

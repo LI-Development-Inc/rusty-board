@@ -1,4 +1,5 @@
 use actix_web::{web, App, HttpServer};
+use actix_files::Files;
 use std::sync::Arc;
 use rb_api::handlers::AppState;
 
@@ -49,6 +50,8 @@ async fn main() -> std::io::Result<()> {
             // Register your routes here
             .service(
                 web::scope("")
+                    .service(Files::new("/static/uploads", "./data/uploads").show_files_listing())
+
                     .route("/", web::get().to(rb_api::handlers::index))
                     .route("/{board}/", web::get().to(rb_api::handlers::board_index)) 
                     .route("/{board}/thread/{id}", web::get().to(rb_api::handlers::view_thread))
