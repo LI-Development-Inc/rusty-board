@@ -1,5 +1,5 @@
 //! # Core Traits (Ports)
-//! 
+//! //! rusty-board/crates/rb-core/src/traits.rs
 //! Any plugin must implement these traits to be used by the binary.
 
 use async_trait::async_trait;

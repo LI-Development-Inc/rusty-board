@@ -1,5 +1,5 @@
 //! # rb-storage-local
-//! 
+//! rusty-board/crates/rb-storage-local/src/lib.rs
 //! Local filesystem implementation of `MediaStore`.
 //! Features: Content-addressable storage, directory sharding, and thumbnailing.
 

@@ -1,5 +1,5 @@
 //! # rb-auth-simple
-//! 
+//! rusty-board/crates/rb-auth-simple/src/lib.rs
 //! Argon2-based implementation of `AuthProvider`.
 //! Handles secure tripcodes, staff authentication, and ephemeral thread IDs.
 

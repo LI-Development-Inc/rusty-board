@@ -1,3 +1,6 @@
+// rusty-board/bin/rusty-board/src/main.rs
+// Main entry point for Rusty-Board
+
 use actix_web::{web, App, HttpServer};
 use actix_files::Files;
 use std::sync::Arc;

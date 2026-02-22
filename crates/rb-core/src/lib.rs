@@ -1,4 +1,4 @@
-//! # rb-core
+//! rusty-board/crates/rb-core/src/lib.rs
 //!
 //! The central domain logic and interface definitions for Rusty-Board.
 

@@ -1,4 +1,4 @@
-//! # rb-api Handlers
+//! rusty-board/crates/rb-ui/src/handlers.rs Handlers
 //! 
 //! This module coordinates the flow between HTTP requests and Core traits.
 

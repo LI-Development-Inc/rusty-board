@@ -1,3 +1,8 @@
+//! rusty-board/crates/rb-db-sqlite/src/lib.rs
+//! SQLite implementation of `BoardRepo` using SQLx.
+// Provides persistent storage for boards, threads, and posts with a simple schema. 
+// Designed for ease of setup and local development.
+
 use async_trait::async_trait;
 use rb_core::models::{Board, Post, Thread};
 use rb_core::traits::BoardRepo;

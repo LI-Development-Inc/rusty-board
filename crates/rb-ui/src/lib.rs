@@ -1,3 +1,5 @@
+// rusty-board/crates/rb-ui/src/lib.rs
+// This module defines the templates for rendering the HTML pages of the imageboard.
 use askama::Template;
 use rb_core::models::{Board, Thread, Post};
 

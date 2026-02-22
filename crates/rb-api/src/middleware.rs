@@ -1,4 +1,4 @@
-//! # rb-api Middleware
+//! rusty-board/crates/rb-api/src/middleware.rs Middleware
 //! 
 //! Custom middleware for security, logging, and traffic control.
 

@@ -1,5 +1,5 @@
 //! # Domain Models
-//! 
+//! rusty-board/crates/rb-core/src/models.rs
 //! These structs represent the core entities of Rusty-Board.
 //! We use UUID v7 for time-ordered, globally unique identification.
 
