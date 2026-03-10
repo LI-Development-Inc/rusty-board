@@ -1,0 +1,2 @@
+ALTER TABLE threads DROP CONSTRAINT IF EXISTS fk_threads_op_post;
+DROP TABLE IF EXISTS posts;

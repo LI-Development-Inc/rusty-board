@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}/{{ board.slug }}/ — Thread No.{{ thread.id }}{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/board/{{ board.slug }}">/{{ board.slug }}/</a>
+  <a href="/board/{{ board.slug }}/catalog">[catalog]</a>
+{% endblock %}
+
+{% block content %}
+<div class="board-header">
+  <h1><a href="/board/{{ board.slug }}">/{{ board.slug }}/</a> — {{ board.title }}</h1>
+  <nav class="board-nav">
+    <a href="/board/{{ board.slug }}">[← Index]</a>
+    <a href="/board/{{ board.slug }}/catalog">[Catalog]</a>
+    {% if thread.sticky %}<span class="tag sticky">[STICKY]</span>{% endif %}
+    {% if is_closed %}<span class="tag closed">[CLOSED]</span>{% endif %}
+  </nav>
+</div>
+
+{% if !is_closed %}
+<div class="reply-form" id="top-reply-form">
+  <details open>
+    <summary>▼ Reply to Thread</summary>
+    <form action="/board/{{ board.slug }}/post" method="POST" enctype="multipart/form-data" data-reply-form>
+      <input type="hidden" name="thread_id" value="{{ thread.id }}">
+      <div class="form-row">
+        <label class="form-label">Name
+          <input type="text" name="name" placeholder="Anonymous  (use #pass for tripcode)" maxlength="64" title="Name field. Append #password for tripcode, ##password for secure tripcode, or ### Role for staff capcode.">
+        </label>
+        <label class="form-label">Email
+          <input type="text" name="email" placeholder="sage" maxlength="64">
+        </label>
+      </div>
+      <label class="form-label">Comment
+        <textarea name="body" id="reply-body" rows="5" placeholder="Write your reply..."></textarea>
+      </label>
+      <label class="form-label">File
+        <input type="file" name="files" accept="image/jpeg,image/png,image/gif,image/webp">
+      </label>
+      <button type="submit" class="btn-reply">Reply</button>
+    </form>
+  </details>
+</div>
+{% else %}
+<div class="thread-closed-notice">This thread is closed.</div>
+{% endif %}
+
+<hr>
+
+<div class="posts">
+  {% for pd in posts %}
+  <div class="post {% if loop.index == 1 %}op-post{% else %}reply-post{% endif %}" id="post-{{ pd.post.post_number }}">
+    <div class="post-header">
+      <span class="post-name">{% if pd.post.name.is_some() %}{{ pd.post.name.as_ref().unwrap() }}{% else %}Anonymous{% endif %}</span>
+      {% if pd.capcode_role.is_some() %}
+      <span class="post-capcode capcode--{{ pd.capcode_css.as_ref().unwrap() }}" title="Verified staff identity">!!!! {{ pd.capcode_role.as_ref().unwrap() }}</span>
+      {% elif pd.post.tripcode.is_some() %}
+      <span class="post-tripcode">{{ pd.post.tripcode.as_ref().unwrap() }}</span>
+      {% endif %}
+      <span class="post-date">{{ pd.post.created_at }}</span>
+      <span class="poster-id" style="background:#{{ pd.poster_id }};color:#fff;border-color:#{{ pd.poster_id }}" title="Poster ID">ID: {{ pd.poster_id }}</span>
+      <a class="post-number" href="#post-{{ pd.post.post_number }}" data-post-number="{{ pd.post.post_number }}">No.{{ pd.post.post_number }}</a>
+      <a class="post-flag-link" href="javascript:void(0)" data-thread="{{ thread.id }}" data-board="{{ board.slug }}">[Flag]</a>
+    </div>
+    {% if !pd.attachments.is_empty() %}
+    <div class="post-images">
+      {% for att in pd.attachments %}
+      <div class="post-image">
+        {% if att.thumbnail_key.is_some() %}
+        <a href="/media/{{ att.media_key.0 }}" target="_blank" class="image-link">
+          <img src="/media/{{ att.thumbnail_key.as_ref().unwrap().0 }}"
+               alt="{{ att.filename }}"
+               class="post-thumb"
+               title="{{ att.filename }} ({{ att.size_kb }}KB)">
+        </a>
+        {% else %}
+        <a href="/media/{{ att.media_key.0 }}" target="_blank">[{{ att.filename }}]</a>
+        {% endif %}
+        <div class="image-info">{{ att.filename }} ({{ att.size_kb }}KB)</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="post-body">{{ pd.post.body }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="pagination">
+  {% if current_page > 1 %}
+  <a href="/board/{{ board.slug }}/thread/{{ thread.id }}?page={{ current_page - 1 }}">[Prev]</a>
+  {% endif %}
+  Page {{ current_page }} of {{ total_pages }}
+  {% if current_page < total_pages %}
+  <a href="/board/{{ board.slug }}/thread/{{ thread.id }}?page={{ current_page + 1 }}">[Next]</a>
+  {% endif %}
+</div>
+
+<div class="thread-bottom-nav">
+  <a href="/board/{{ board.slug }}">[Back to /{{ board.slug }}/]</a>
+  <a href="#top-reply-form">[Reply]</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var THREAD_ID  = '{{ thread.id }}';
+  var BOARD_SLUG = '{{ board.slug }}';
+  var qr = null;
+
+  /* ── Quick Reply ─────────────────────────────────────────────────────── */
+  function getQR() {
+    if (qr) return qr;
+    var box = document.createElement('div');
+    box.id = 'quick-reply';
+    box.className = 'quick-reply';
+    box.innerHTML =
+      '<div class="qr-header"><strong>Quick Reply</strong>' +
+        '<a href="javascript:void(0)" class="qr-close">x</a></div>' +
+      '<form action="/board/' + BOARD_SLUG + '/post" method="POST"' +
+            ' enctype="multipart/form-data" data-reply-form>' +
+        '<input type="hidden" name="thread_id" value="' + THREAD_ID + '">' +
+        '<input type="text" name="name" placeholder="Name" class="qr-input">' +
+        '<input type="text" name="email" placeholder="Email / sage" class="qr-input">' +
+        '<textarea name="body" id="qr-body" rows="4" placeholder="Comment..." class="qr-textarea"></textarea>' +
+        '<div class="qr-row">' +
+          '<input type="file" name="files" accept="image/*" class="qr-file">' +
+          '<button type="submit" class="btn-reply">Reply</button>' +
+        '</div>' +
+      '</form>';
+    document.body.appendChild(box);
+    qr = box;
+    // Drag
+    var hdr = box.querySelector('.qr-header');
+    var dragging = false, ox = 0, oy = 0;
+    hdr.addEventListener('mousedown', function(e) {
+      dragging = true; ox = e.clientX - box.offsetLeft; oy = e.clientY - box.offsetTop;
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      box.style.left = (e.clientX - ox) + 'px';
+      box.style.top  = (e.clientY - oy) + 'px';
+      box.style.right = 'auto'; box.style.bottom = 'auto';
+    });
+    document.addEventListener('mouseup', function() { dragging = false; });
+    box.querySelector('.qr-close').addEventListener('click', function() {
+      box.style.display = 'none';
+    });
+    return box;
+  }
+
+  function openQR(quoteNum) {
+    var box = getQR();
+    box.style.display = 'block';
+    var ta = box.querySelector('#qr-body');
+    if (quoteNum) ta.value = '>>' + quoteNum + '\n' + ta.value;
+    ta.focus();
+  }
+
+  document.addEventListener('click', function(e) {
+    var num = e.target.closest('[data-post-number]');
+    if (num) { e.preventDefault(); openQR(num.dataset.postNumber); }
+  });
+
+  /* ── Quote linkification ─────────────────────────────────────────────── */
+  // Askama HTML-escapes > as &gt; so post bodies arrive in innerHTML as
+  // &gt;&gt;&gt;/slug/N  and  &gt;&gt;N
+  // Use RegExp constructor to avoid slash-escaping issues in template files.
+  var RE_XBOARD_N  = new RegExp('&gt;&gt;&gt;/([a-z0-9_-]+)/(\\d+)', 'g');
+  var RE_XBOARD    = new RegExp('&gt;&gt;&gt;/([a-z0-9_-]+)/', 'g');
+  var RE_SAME      = new RegExp('&gt;&gt;(\\d+)', 'g');
+
+  function linkifyQuotes() {
+    document.querySelectorAll('.post-body').forEach(function(el) {
+      var html = el.innerHTML;
+
+      // Pass 1 — cross-board with post number: >>>/slug/N
+      html = html.replace(RE_XBOARD_N, function(_, slug, n) {
+        return '<a class="post-quote-link cross-board"' +
+               ' href="/board/' + slug + '#post-' + n + '"' +
+               ' data-xboard="' + slug + '"' +
+               ' data-target="' + n + '"' +
+               '>&gt;&gt;&gt;/' + slug + '/' + n + '</a>';
+      });
+
+      // Pass 2 — cross-board board only: >>>/slug/
+      html = html.replace(RE_XBOARD, function(_, slug) {
+        return '<a class="post-quote-link cross-board"' +
+               ' href="/board/' + slug + '"' +
+               '>&gt;&gt;&gt;/' + slug + '/</a>';
+      });
+
+      // Pass 3 — same-thread: >>N
+      html = html.replace(RE_SAME, function(_, n) {
+        return '<a class="post-quote-link"' +
+               ' href="#post-' + n + '"' +
+               ' data-target="' + n + '"' +
+               '>&gt;&gt;' + n + '</a>';
+      });
+
+      el.innerHTML = html;
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', linkifyQuotes);
+  } else {
+    linkifyQuotes();
+  }
+
+  /* ── Hover preview popup ─────────────────────────────────────────────── */
+  var popup = null;
+  var xboardCache = {};
+
+  function getPopup() {
+    if (popup) return popup;
+    popup = document.createElement('div');
+    popup.className = 'quote-preview';
+    document.body.appendChild(popup);
+    return popup;
+  }
+
+  document.addEventListener('mouseover', function(e) {
+    var link = e.target.closest('.post-quote-link');
+    if (!link) return;
+    var p = getPopup();
+
+    if (link.dataset.xboard) {
+      // Cross-board: show a "jump to post" card (post content not available client-side)
+      var slug = link.dataset.xboard;
+      var n    = link.dataset.target;
+      var key  = slug + '/' + n;
+      var html = xboardCache[key] ||
+        '<div style="padding:.4rem"><strong>&gt;&gt;&gt;/' + slug + '/' + n + '</strong><br>' +
+        '<a href="/board/' + slug + '#post-' + n + '">Jump to post on /' + slug + '/ →</a></div>';
+      xboardCache[key] = html;
+      p.innerHTML = html;
+      p.style.display = 'block';
+      return;
+    }
+
+    // Same-thread
+    var target = document.getElementById('post-' + link.dataset.target);
+    if (!target) return;
+    p.innerHTML = target.outerHTML;
+    // Strip nested popups inside the preview clone to avoid recursion
+    p.querySelectorAll('.quote-preview').forEach(function(x) { x.remove(); });
+    p.style.display = 'block';
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!popup || popup.style.display === 'none') return;
+    var x = e.clientX + 16, y = e.clientY + 8;
+    if (x + 440 > window.innerWidth) x = e.clientX - 456;
+    if (y + 200 > window.innerHeight) y = e.clientY - 216;
+    popup.style.left = x + 'px';
+    popup.style.top  = y + 'px';
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    if (e.target.closest('.post-quote-link') && popup) popup.style.display = 'none';
+  });
+
+  /* ── Flag modal ──────────────────────────────────────────────────────── */
+  var flagModal = null, flagThread = null, flagBoard = null;
+
+  function getFlagModal() {
+    if (flagModal) return flagModal;
+    var m = document.createElement('div');
+    m.id = 'flag-modal'; m.className = 'flag-modal';
+    m.innerHTML =
+      '<div class="flag-modal-inner">' +
+        '<div class="flag-modal-header"><strong>Report Post</strong>' +
+          '<a href="javascript:void(0)" id="flag-close">x</a></div>' +
+        '<p style="margin:.3rem 0">Describe the rule violation:</p>' +
+        '<textarea id="flag-reason" rows="3" maxlength="256" placeholder="Reason..."' +
+                  ' style="width:100%;box-sizing:border-box"></textarea>' +
+        '<div style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem">' +
+          '<button id="flag-submit" class="btn-reply">Submit</button>' +
+          '<span id="flag-status" style="font-size:.9em"></span>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(m);
+    flagModal = m;
+    document.getElementById('flag-close').addEventListener('click', function() {
+      m.style.display = 'none';
+    });
+    return m;
+  }
+
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('.post-flag-link');
+    if (!el) return;
+    e.preventDefault();
+    flagThread = el.dataset.thread; flagBoard = el.dataset.board;
+    getFlagModal().style.display = 'flex';
+    document.getElementById('flag-reason').focus();
+  });
+
+  document.addEventListener('click', function(e) {
+    if (e.target.id !== 'flag-submit') return;
+    var reason = document.getElementById('flag-reason').value.trim();
+    var status = document.getElementById('flag-status');
+    if (!reason) { status.textContent = 'Enter a reason.'; return; }
+    var btn = e.target;
+    btn.disabled = true; status.textContent = 'Submitting...';
+    fetch('/board/' + flagBoard + '/thread/' + flagThread + '/flag', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({reason: reason})
+    }).then(function(r) {
+      status.textContent = (r.ok || r.status === 201) ? 'Reported.' : 'Error — try again.';
+      if (r.ok || r.status === 201) {
+        document.getElementById('flag-reason').value = '';
+        setTimeout(function() { flagModal.style.display = 'none'; }, 1200);
+      }
+      btn.disabled = false;
+    }).catch(function() { status.textContent = 'Network error.'; btn.disabled = false; });
+  });
+
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+{#- templates/components/flash.html
+    Renders a dismissable flash message banner.
+
+    Context: flash_kind (&str — "success" | "error" | "info"),
+             flash_message (&str)
+-#}
+{% if !flash_message.is_empty() %}
+<div class="flash flash-{{ flash_kind }}" role="alert" aria-live="polite">
+  <span class="flash-icon">
+    {% if flash_kind == "success" %}✓{% elif flash_kind == "error" %}✗{% else %}ℹ{% endif %}
+  </span>
+  <span class="flash-text">{{ flash_message }}</span>
+  <button
+    class="flash-dismiss"
+    type="button"
+    aria-label="Dismiss"
+    onclick="this.parentElement.remove()">
+    ×
+  </button>
+</div>
+{% endif %}

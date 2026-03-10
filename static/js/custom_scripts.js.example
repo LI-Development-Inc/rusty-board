@@ -1,0 +1,29 @@
+/**
+ * rusty-board — custom_scripts.js.example
+ *
+ * Copy this file to custom_scripts.js and add your site-specific JavaScript.
+ * Reference it in templates/base.html alongside app.js.
+ *
+ * This file is intentionally empty — it is a template for operators.
+ * Custom scripts have access to the full DOM; board state is not exposed via
+ * a JavaScript API in v1.0. Poll the JSON API endpoints if you need live data.
+ *
+ * Examples of appropriate custom scripts:
+ *   - Injecting board-specific CSS (e.g. banner images, custom fonts)
+ *   - Adding a site-specific header/footer element
+ *   - Wiring up an external analytics snippet (privacy-respecting only)
+ *   - Adding keyboard shortcuts for navigation between threads
+ *
+ * Examples of things NOT to do here:
+ *   - Bypass Content Security Policy headers (they exist for good reason)
+ *   - Track user behaviour or inject third-party trackers
+ *   - Override or monkey-patch functions from app.js (create a PR instead)
+ */
+
+(function () {
+  "use strict";
+
+  // Your custom code goes here.
+  // document.addEventListener("DOMContentLoaded", function () { ... });
+
+}());

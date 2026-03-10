@@ -1,0 +1,47 @@
+{#- templates/components/pagination.html
+    Renders previous/next and numbered page navigation.
+
+    Context: base_url (&str), current_page (u32), total_pages (u32)
+    Example base_url: "/board/tech" or "/mod/flags"
+-#}
+{% if total_pages > 1 %}
+<nav class="pagination" aria-label="Page navigation">
+  {% if current_page > 1 %}
+  <a href="{{ base_url }}?page={{ current_page - 1 }}" rel="prev" aria-label="Previous page">
+    [← Prev]
+  </a>
+  {% else %}
+  <span class="pagination-disabled">[← Prev]</span>
+  {% endif %}
+
+  {#- Show up to 7 page numbers, centred around current page -#}
+  {% let window_start = if current_page > 3 { current_page - 3 } else { 1 } %}
+  {% let window_end   = if window_start + 6 < total_pages { window_start + 6 } else { total_pages } %}
+
+  {% if window_start > 1 %}
+  <a href="{{ base_url }}?page=1">1</a>
+  {% if window_start > 2 %}<span class="pagination-ellipsis">…</span>{% endif %}
+  {% endif %}
+
+  {% for page in (window_start..=window_end) %}
+    {% if page == current_page %}
+    <span class="pagination-current current" aria-current="page">{{ page }}</span>
+    {% else %}
+    <a href="{{ base_url }}?page={{ page }}">{{ page }}</a>
+    {% endif %}
+  {% endfor %}
+
+  {% if window_end < total_pages %}
+  {% if window_end < total_pages - 1 %}<span class="pagination-ellipsis">…</span>{% endif %}
+  <a href="{{ base_url }}?page={{ total_pages }}">{{ total_pages }}</a>
+  {% endif %}
+
+  {% if current_page < total_pages %}
+  <a href="{{ base_url }}?page={{ current_page + 1 }}" rel="next" aria-label="Next page">
+    [Next →]
+  </a>
+  {% else %}
+  <span class="pagination-disabled">[Next →]</span>
+  {% endif %}
+</nav>
+{% endif %}

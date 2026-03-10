@@ -1,0 +1,13 @@
+# Exclude files not needed in Docker build context
+target/
+.git/
+.github/
+.env
+.env.*
+*.md
+docs/
+media/
+tests/
+benches/
+lcov.info
+tarpaulin-report.html

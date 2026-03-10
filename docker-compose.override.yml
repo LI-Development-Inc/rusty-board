@@ -1,0 +1,51 @@
+# docker-compose.override.yml — development overrides
+#
+# This file is automatically merged with docker-compose.yml by Docker Compose
+# when running `docker-compose up` locally. It is NOT used in production.
+#
+# Enables:
+#   - cargo-watch hot-reload for the application container
+#   - Verbose SQL query logging on Postgres
+#   - Source code mount so changes are picked up without rebuilding the image
+
+version: "3.9"
+
+services:
+  app:
+    # Override the production entrypoint with cargo-watch for hot reload.
+    # Requires the Rust toolchain to be installed inside the container,
+    # which means using a dev-targeted Dockerfile stage (not the release stage).
+    entrypoint: []
+    command:
+      - cargo
+      - watch
+      - --why
+      - -x
+      - "run --features web-axum,db-postgres,auth-jwt,media-local,redis"
+    volumes:
+      # Mount the entire project so cargo-watch can detect source changes.
+      - .:/app
+      # Preserve the target directory across restarts to avoid full recompiles.
+      - cargo-target:/app/target
+      # Cargo registry cache
+      - cargo-registry:/usr/local/cargo/registry
+    environment:
+      APP_ENV: development
+      RUST_LOG: "rusty_board=debug,tower_http=debug,sqlx=debug"
+    # The release image has a non-root user; dev uses root for simplicity.
+    user: root
+
+  postgres:
+    environment:
+      # Enable verbose query logging in development.
+      POSTGRES_INITDB_ARGS: "--auth-host=trust"
+    command:
+      - postgres
+      - -c
+      - log_statement=all
+      - -c
+      - log_duration=on
+
+volumes:
+  cargo-target:
+  cargo-registry:

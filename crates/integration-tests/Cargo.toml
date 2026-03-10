@@ -1,0 +1,100 @@
+[package]
+name    = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false  # internal test crate only
+
+[features]
+default = ["web-axum"]
+web-axum = [
+    "api-adapters/web-axum",
+]
+
+[dependencies]
+domains          = { path = "../domains", features = ["testing"] }
+services         = { path = "../services" }
+api-adapters     = { path = "../api-adapters" }
+storage-adapters = { path = "../storage-adapters" }
+
+serde      = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+chrono     = { workspace = true }
+uuid       = { workspace = true }
+tokio      = { workspace = true }
+anyhow     = { workspace = true }
+bytes      = { workspace = true }
+mime       = { workspace = true }
+
+axum       = { workspace = true }
+tower      = { workspace = true }
+
+[dev-dependencies]
+mockall    = { workspace = true }
+tokio-test = { workspace = true }
+
+[[test]]
+name              = "board_service"
+path              = "tests/board_service.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "post_service"
+path              = "tests/post_service.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "thread_service"
+path              = "tests/thread_service.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "domain_models"
+path              = "tests/domain_models.rs"
+
+[[test]]
+name              = "port_contracts"
+path              = "tests/port_contracts.rs"
+
+[[test]]
+name              = "utils"
+path              = "tests/utils.rs"
+
+[[test]]
+name = "fixtures"
+path = "tests/fixtures.rs"
+
+[[test]]
+name              = "api_auth"
+path              = "tests/api_auth.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "api_board"
+path              = "tests/api_board.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "api_admin"
+path              = "tests/api_admin.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "api_moderation"
+path              = "tests/api_moderation.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "api_board_owner"
+path              = "tests/api_board_owner.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "api_post"
+path              = "tests/api_post.rs"
+required-features = ["web-axum"]
+
+[[test]]
+name              = "media_upload"
+path              = "tests/media_upload.rs"
+required-features = ["web-axum"]

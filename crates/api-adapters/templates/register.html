@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Register — rusty-board{% endblock %}
+
+{% block content %}
+<div class="login-form">
+  <h1>Create Account</h1>
+  {% if let Some(err) = error %}
+  <div class="error">{{ err }}</div>
+  {% endif %}
+  <p style="font-size:.9em;color:var(--fg-muted);margin-bottom:1rem">
+    Register for a user account. Posting is anonymous — this account is for
+    tracking your staff requests and receiving announcements.
+  </p>
+  <label class="form-label">Username
+    <input type="text" id="reg-username" autocomplete="username" autofocus
+           placeholder="3–32 characters, letters/numbers/underscore">
+  </label>
+  <label class="form-label">Password
+    <input type="password" id="reg-password" autocomplete="new-password"
+           placeholder="Minimum 12 characters">
+  </label>
+  <label class="form-label">Confirm Password
+    <input type="password" id="reg-confirm" autocomplete="new-password"
+           placeholder="Repeat password">
+  </label>
+  <div id="reg-error" class="error" style="display:none"></div>
+  <button id="reg-btn" type="button" class="btn-reply" style="margin-top:.5rem">Register</button>
+  <p style="margin-top:.75rem;font-size:.9em">
+    Already have an account? <a href="/auth/login">[login]</a>
+  </p>
+</div>
+<script>
+(function() {
+  function doRegister() {
+    var username = document.getElementById('reg-username').value.trim();
+    var password = document.getElementById('reg-password').value;
+    var confirm  = document.getElementById('reg-confirm').value;
+    var errEl    = document.getElementById('reg-error');
+    var btn      = document.getElementById('reg-btn');
+
+    errEl.style.display = 'none';
+
+    if (!username || !password || !confirm) {
+      errEl.textContent = 'All fields are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (password !== confirm) {
+      errEl.textContent = 'Passwords do not match.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Registering…';
+
+    fetch('/auth/register', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        username:         username,
+        password:         password,
+        password_confirm: confirm
+      }),
+    })
+    .then(function(resp) {
+      if (resp.ok) {
+        // Registration succeeded — redirect to login with a success hint.
+        window.location.href = '/auth/login?registered=1';
+      } else {
+        return resp.json().catch(function() { return {}; }).then(function(body) {
+          errEl.textContent = body.message || 'Registration failed. Please try again.';
+          errEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Register';
+        });
+      }
+    })
+    .catch(function() {
+      errEl.textContent = 'Network error — is the server running?';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Register';
+    });
+  }
+
+  document.getElementById('reg-btn').addEventListener('click', doRegister);
+  ['reg-username', 'reg-password', 'reg-confirm'].forEach(function(id) {
+    document.getElementById(id).addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') doRegister();
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,46 @@
+/**
+ * rusty-board — theme.js.example
+ *
+ * Copy to theme.js and reference it in templates/base.html after app.js.
+ * This file shows how to add a custom theme switcher beyond the built-in
+ * dark/yotsuba toggle already in app.js.
+ *
+ * Prerequisites: add your theme CSS file to /static/css/ and link it in
+ * base.html with id="theme-link" so this script can swap it.
+ */
+
+(function () {
+  "use strict";
+
+  var THEMES = {
+    default: "/static/css/style.css",
+    dark:    "/static/css/dark_style.css",
+    yotsuba: "/static/css/yotsuba.css",
+    // Add your own theme here:
+    // mytheme: "/static/css/custom_theme.css",
+  };
+
+  var STORAGE_KEY = "rusty-board-theme";
+
+  function applyTheme(name) {
+    var link = document.getElementById("theme-link");
+    if (!link) return;
+    var url = THEMES[name] || THEMES["default"];
+    link.href = url;
+    try { localStorage.setItem(STORAGE_KEY, name); } catch (e) {}
+  }
+
+  function currentTheme() {
+    try { return localStorage.getItem(STORAGE_KEY) || "default"; } catch (e) { return "default"; }
+  }
+
+  // Apply saved theme on load
+  applyTheme(currentTheme());
+
+  // Expose toggle helper for your UI controls
+  window.RustyBoard = window.RustyBoard || {};
+  window.RustyBoard.setTheme = applyTheme;
+  window.RustyBoard.currentTheme = currentTheme;
+  window.RustyBoard.themes = Object.keys(THEMES);
+
+}());

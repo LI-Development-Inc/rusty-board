@@ -1,0 +1,25 @@
+[package]
+name    = "services"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+domains     = { path = "../domains" }
+thiserror   = { workspace = true }
+anyhow      = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+chrono      = { workspace = true }
+uuid        = { workspace = true }
+tracing     = { workspace = true }
+async-trait = { workspace = true }
+bytes       = { workspace = true }
+mime        = { workspace = true }
+sha2        = "0.10"   # for ip_hash utility function
+hex         = "0.4"    # for hex encoding hashes
+
+[dev-dependencies]
+domains     = { path = "../domains", features = ["testing"] }
+mockall     = { workspace = true }
+tokio       = { workspace = true }
+tokio-test  = { workspace = true }

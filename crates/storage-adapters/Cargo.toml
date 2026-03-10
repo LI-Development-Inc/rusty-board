@@ -1,0 +1,47 @@
+[package]
+name    = "storage-adapters"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+db-postgres = ["sqlx"]
+db-sqlite   = []           # v1.2+
+media-s3    = ["aws-sdk-s3", "aws-config"]
+media-local = []
+video       = ["ffmpeg-next"]
+documents   = ["pdfium-render"]
+redis       = ["deadpool-redis"]
+
+[dependencies]
+domains     = { path = "../domains" }
+thiserror   = { workspace = true }
+anyhow      = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+chrono      = { workspace = true }
+uuid        = { workspace = true }
+bytes       = { workspace = true }
+mime        = { workspace = true }
+tracing     = { workspace = true }
+dashmap     = { workspace = true }
+tokio       = { workspace = true }
+async-trait = { workspace = true }
+sha2        = "0.10"
+hex         = "0.4"
+
+# Image processing — always compiled
+image       = { workspace = true }
+oxipng      = { workspace = true }
+
+# Optional features
+sqlx          = { workspace = true, optional = true }
+aws-sdk-s3    = { workspace = true, optional = true }
+aws-config    = { workspace = true, optional = true }
+ffmpeg-next   = { workspace = true, optional = true }
+pdfium-render = { workspace = true, optional = true }
+deadpool-redis = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio       = { workspace = true }
+tokio-test  = { workspace = true }

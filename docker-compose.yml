@@ -1,0 +1,100 @@
+version: "3.9"
+
+# rusty-board local development stack
+# Usage:
+#   docker compose up -d          # start postgres + redis + minio
+#   docker compose up app         # start the application too
+#   docker compose logs -f app    # follow application logs
+#   docker compose down -v        # stop and remove volumes
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       rusty_board
+      POSTGRES_USER:     rusty
+      POSTGRES_PASSWORD: rusty
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rusty -d rusty_board"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     minio_access_key
+      MINIO_ROOT_PASSWORD: minio_secret_key
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # MinIO bucket setup — runs once to create the default media bucket
+  minio_setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minio_access_key minio_secret_key &&
+      mc mb --ignore-existing local/rusty-board-media &&
+      mc policy set public local/rusty-board-media &&
+      echo 'MinIO bucket ready'
+      "
+    restart: no
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_URL:      postgresql://rusty:rusty@postgres:5432/rusty_board
+      REDIS_URL:   redis://redis:6379
+    ports:
+      - "8080:8080"
+    volumes:
+      - media_data:/media   # only used when compiled with media-local feature
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgdata:
+  minio_data:
+  media_data:

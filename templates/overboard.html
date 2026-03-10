@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Overboard — Recent Posts{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  {% for board in boards %}
+  <a href="/board/{{ board.slug }}">/{{ board.slug }}/</a>
+  {% endfor %}
+{% endblock %}
+
+{% block footer_boards %}
+  {% for board in boards %}
+  | <a href="/board/{{ board.slug }}">/{{ board.slug }}/</a>
+  {% endfor %}
+{% endblock %}
+
+{% block content %}
+<div class="board-header">
+  <h1>Overboard — Recent Posts</h1>
+  <nav class="board-nav">
+    {% for board in boards %}
+    <a href="/board/{{ board.slug }}">/{{ board.slug }}/ — {{ board.title }}</a>
+    {% endfor %}
+  </nav>
+</div>
+
+<hr>
+
+<div class="posts overboard-posts">
+  {% for post in recent_posts %}
+  <div class="post reply-post" id="post-{{ post.post_number }}">
+    <div class="post-header">
+      <a class="board-tag" href="/board/{{ post.board_slug }}">/{{ post.board_slug }}/</a>
+      <span class="post-name">{% if post.name.is_some() %}{{ post.name.as_ref().unwrap() }}{% else %}Anonymous{% endif %}</span>
+      <span class="post-date">{{ post.created_at }}</span>
+      <a class="post-number" href="/board/{{ post.board_slug }}/thread/{{ post.thread_id }}#post-{{ post.post_number }}">No.{{ post.post_number }}</a>
+      <a class="thread-link" href="/board/{{ post.board_slug }}/thread/{{ post.thread_id }}">[Thread]</a>
+    </div>
+    <div class="post-body">{{ post.body }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="pagination">
+  {% if current_page > 1 %}<a href="/overboard?page={{ current_page - 1 }}">[Prev]</a>{% endif %}
+  Page {{ current_page }} of {{ total_pages }}
+  {% if current_page < total_pages %}<a href="/overboard?page={{ current_page + 1 }}">[Next]</a>{% endif %}
+</div>
+{% endblock %}

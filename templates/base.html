@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>{% block title %}rusty-board{% endblock %}</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="/static/css/style.css" id="theme-css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <nav class="site-nav">
+      <a href="/overboard" class="site-name">rusty-board</a>
+      <span class="nav-sep">|</span>
+      <a href="/overboard">[overboard]</a>
+      {% block nav_boards %}{% endblock %}
+      {% block nav_other_boards %}{% endblock %}
+      <span id="nav-other-boards" class="nav-other-boards"></span>
+      <span class="nav-right">
+        <a href="javascript:void(0)" id="settings-btn">[settings]</a>
+        {% block nav_right %}| <a href="/auth/login">[login]</a>{% endblock %}
+      </span>
+    </nav>
+  </header>
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <nav class="footer-nav">
+      <a href="/overboard">[overboard]</a>
+      {% block footer_boards %}{% endblock %}
+      {% block footer_login %}| <a href="/auth/login">[login]</a>{% endblock %}
+    </nav>
+  </footer>
+
+  <script src="/static/js/app.js" defer></script>
+  <script>
+  // Dynamic board list in nav
+  (function() {
+    var container = document.getElementById('nav-other-boards');
+    if (!container) return;
+    // Determine which slug is "current" to skip it
+    var currentSlug = (function() {
+      var m = window.location.pathname.match(/^\/board\/([^/]+)/);
+      return m ? m[1] : null;
+    })();
+    fetch('/boards?page=1', {headers: {'Accept': 'application/json'}})
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.items) return;
+        var html = data.items
+          .filter(function(b) { return b.slug !== currentSlug; })
+          .map(function(b) {
+            return ' <a href="/board/' + b.slug + '">/' + b.slug + '/</a>';
+          }).join(' -');
+        if (html) container.innerHTML = '<span class="nav-sep">|</span>' + html;
+      })
+      .catch(function() {});
+  })();
+
+  // Settings panel toggle + theme switcher
+  (function() {
+    var THEMES = ['default', 'yotsuba', 'dark'];
+    var LABELS = {'default': 'Futaba', 'yotsuba': 'Yotsuba B', 'dark': 'Dark'};
+
+    function applyTheme(t) {
+      document.getElementById('theme-css').href = t === 'default'
+        ? '/static/css/style.css'
+        : '/static/css/' + t + '.css';
+      localStorage.setItem('theme', t);
+    }
+
+    function buildPanel() {
+      var p = document.createElement('div');
+      p.id = 'settings-panel';
+      p.innerHTML =
+        '<div id="settings-inner">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">' +
+            '<strong>Settings</strong>' +
+            '<a href="javascript:void(0)" id="settings-close" style="font-weight:bold">✕</a>' +
+          '</div>' +
+          '<label style="display:block;margin-bottom:.4rem">Theme<br>' +
+            '<select id="theme-select" style="margin-top:.2rem">' +
+              THEMES.map(function(t) { return '<option value="' + t + '">' + LABELS[t] + '</option>'; }).join('') +
+            '</select>' +
+          '</label>' +
+        '</div>';
+      document.body.appendChild(p);
+      var sel = document.getElementById('theme-select');
+      var cur = localStorage.getItem('theme') || 'default';
+      sel.value = cur;
+      sel.addEventListener('change', function() { applyTheme(this.value); });
+      document.getElementById('settings-close').addEventListener('click', function() {
+        p.style.display = 'none';
+      });
+      return p;
+    }
+
+    var panel = null;
+    document.addEventListener('click', function(e) {
+      if (e.target.id === 'settings-btn') {
+        e.preventDefault();
+        if (!panel) panel = buildPanel();
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      }
+    });
+
+    // Apply saved theme on load
+    var saved = localStorage.getItem('theme');
+    if (saved && saved !== 'default') {
+      document.getElementById('theme-css').href = '/static/css/' + saved + '.css';
+      var sel2 = document.getElementById('theme-select');
+      if (sel2) sel2.value = saved;
+    }
+  })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

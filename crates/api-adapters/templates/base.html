@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>{% block title %}rusty-board{% endblock %}</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="/static/css/style.css" id="theme-css">
+  {% block head %}{% endblock %}
+  <style>
+  /* ── Auth badge ─────────────────────────────────────────── */
+  .nav-user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .85em;
+  }
+  .nav-user-badge .badge-role {
+    background: var(--accent, #800000);
+    color: #fff;
+    font-size: .7em;
+    padding: .1em .35em;
+    border-radius: 2px;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  /* ── Toast popup ──────────────────────────────────────────── */
+  #rb-toast {
+    display: none;
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 260px;
+    max-width: 480px;
+    padding: .7rem 1.1rem;
+    border-radius: 4px;
+    font-size: .92em;
+    font-weight: 600;
+    z-index: 9999;
+    box-shadow: 0 2px 12px rgba(0,0,0,.35);
+    text-align: center;
+    pointer-events: none;
+  }
+  #rb-toast.toast-error   { background:#c00; color:#fff; }
+  #rb-toast.toast-warn    { background:#b85c00; color:#fff; }
+  #rb-toast.toast-ok      { background:#2a7a2a; color:#fff; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="site-nav">
+      <a href="/overboard" class="site-name">rusty-board</a>
+      <span class="nav-sep">|</span>
+      <a href="/overboard">[overboard]</a>
+      {% block nav_boards %}{% endblock %}
+      {% block nav_other_boards %}{% endblock %}
+      <span id="nav-other-boards" class="nav-other-boards"></span>
+      <span class="nav-right">
+        <a href="javascript:void(0)" id="settings-btn">[settings]</a>
+        {# nav_right default: replaced by JS once /auth/me resolves #}
+        {% block nav_right %}<span id="nav-auth-area">| <a href="/auth/login">[login]</a></span>{% endblock %}
+      </span>
+    </nav>
+  </header>
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <nav class="footer-nav">
+      <a href="/overboard">[overboard]</a>
+      {% block footer_boards %}{% endblock %}
+      {% block footer_login %}| <a href="/auth/login">[login]</a>{% endblock %}
+    </nav>
+  </footer>
+
+  <!-- Global error toast -->
+  <div id="rb-toast" role="alert" aria-live="assertive"></div>
+
+  <script src="/static/js/app.js" defer></script>
+  <script>
+  // ── Global toast API ─────────────────────────────────────────────────────────
+  window.rbToast = (function() {
+    var el = null;
+    var timer = null;
+    function get() {
+      if (!el) el = document.getElementById('rb-toast');
+      return el;
+    }
+    return {
+      show: function(msg, kind, durationMs) {
+        var t = get();
+        if (!t) return;
+        t.textContent = msg;
+        t.className = 'toast-' + (kind || 'error');
+        t.style.display = 'block';
+        clearTimeout(timer);
+        timer = setTimeout(function() { t.style.display = 'none'; }, durationMs || 4000);
+      },
+      error: function(msg)  { this.show(msg, 'error', 5000); },
+      warn:  function(msg)  { this.show(msg, 'warn',  4000); },
+      ok:    function(msg)  { this.show(msg, 'ok',    3000); },
+    };
+  })();
+
+  // ── Auth-aware nav ───────────────────────────────────────────────────────────
+  // Replaces the default [login] link once we know the session state.
+  // Uses /auth/me which reads the HttpOnly cookie server-side.
+  (function() {
+    var area = document.getElementById('nav-auth-area');
+    if (!area) return; // dashboard pages override nav_right entirely
+    fetch('/auth/me', { credentials: 'same-origin' })
+      .then(function(r) {
+        if (r.status === 401) return null; // not logged in — keep default
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data) return;
+        // Replace [login] with: username [role-badge] | [dashboard] [logout]
+        area.innerHTML =
+          '| <span class="nav-user-badge">' +
+            '<strong>' + escHtml(data.username) + '</strong>' +
+            ' <span class="badge-role">' + escHtml(data.role) + '</span>' +
+          '</span>' +
+          ' | <a href="' + escHtml(data.dashboard_url) + '">[dashboard]</a>' +
+          ' <a href="/auth/logout">[logout]</a>';
+      })
+      .catch(function() {}); // silently skip if server unreachable
+  })();
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Dynamic board list in nav ────────────────────────────────────────────────
+  (function() {
+    var container = document.getElementById('nav-other-boards');
+    if (!container) return;
+    var currentSlug = (function() {
+      var m = window.location.pathname.match(/^\/board\/([^/]+)/);
+      return m ? m[1] : null;
+    })();
+    fetch('/boards?page=1', {headers: {'Accept': 'application/json'}})
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.items) return;
+        var html = data.items
+          .filter(function(b) { return b.slug !== currentSlug; })
+          .map(function(b) {
+            return ' <a href="/board/' + b.slug + '">/' + b.slug + '/</a>';
+          }).join(' -');
+        if (html) container.innerHTML = '<span class="nav-sep">|</span>' + html;
+      })
+      .catch(function() {});
+  })();
+
+  // ── Settings panel + theme switcher ─────────────────────────────────────────
+  (function() {
+    var THEMES = ['default', 'yotsuba', 'dark'];
+    var LABELS = {'default': 'Futaba', 'yotsuba': 'Yotsuba B', 'dark': 'Dark'};
+
+    function applyTheme(t) {
+      document.getElementById('theme-css').href = t === 'default'
+        ? '/static/css/style.css'
+        : '/static/css/' + t + '.css';
+      localStorage.setItem('theme', t);
+    }
+
+    function buildPanel() {
+      var p = document.createElement('div');
+      p.id = 'settings-panel';
+      p.innerHTML =
+        '<div id="settings-inner">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">' +
+            '<strong>Settings</strong>' +
+            '<a href="javascript:void(0)" id="settings-close" style="font-weight:bold">✕</a>' +
+          '</div>' +
+          '<label style="display:block;margin-bottom:.4rem">Theme<br>' +
+            '<select id="theme-select" style="margin-top:.2rem">' +
+              THEMES.map(function(t) { return '<option value="' + t + '">' + LABELS[t] + '</option>'; }).join('') +
+            '</select>' +
+          '</label>' +
+        '</div>';
+      document.body.appendChild(p);
+      var sel = document.getElementById('theme-select');
+      var cur = localStorage.getItem('theme') || 'default';
+      sel.value = cur;
+      sel.addEventListener('change', function() { applyTheme(this.value); });
+      document.getElementById('settings-close').addEventListener('click', function() {
+        p.style.display = 'none';
+      });
+      return p;
+    }
+
+    var panel = null;
+    document.addEventListener('click', function(e) {
+      if (e.target.id === 'settings-btn') {
+        e.preventDefault();
+        if (!panel) panel = buildPanel();
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      }
+    });
+
+    var saved = localStorage.getItem('theme');
+    if (saved && saved !== 'default') {
+      document.getElementById('theme-css').href = '/static/css/' + saved + '.css';
+    }
+  })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}/{{ board.slug }}/ — Board Owner Dashboard{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/board/{{ board.slug }}">/{{ board.slug }}/</a>
+  <a href="/board/{{ board.slug }}/catalog">[catalog]</a>
+  <span class="nav-sep">|</span>
+  <a href="/board-owner/dashboard">[my boards]</a>
+{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<h1>/{{ board.slug }}/ Board Owner Dashboard</h1>
+
+<!-- ── Board config ────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Board Config — /{{ board.slug }}/ — {{ board.title }}</h2>
+  <div class="cfg-inline">
+    <table class="cfg-table" id="owner-cfg-table">
+      <tbody>
+        <tr class="cfg-section-header"><td colspan="2">Content Rules</td></tr>
+        <tr><td class="cfg-label"><strong>Bump limit</strong><span class="cfg-desc">Replies past this count no longer bump the thread.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" id="cfg_bump_limit" data-key="bump_limit" value="{{ config.bump_limit }}" min="1"></td></tr>
+        <tr><td class="cfg-label"><strong>Max files</strong><span class="cfg-desc">Maximum file attachments per post.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" id="cfg_max_files" data-key="max_files" value="{{ config.max_files }}" min="1" max="10"></td></tr>
+        <tr><td class="cfg-label"><strong>Max file size (KB)</strong><span class="cfg-desc">Maximum size per attachment.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" id="cfg_max_file_size" data-key="max_file_size" value="{{ config.max_file_size.0 }}" min="1"></td></tr>
+        <tr><td class="cfg-label"><strong>Max post length</strong><span class="cfg-desc">Maximum post body length in characters.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" id="cfg_max_post_length" data-key="max_post_length" value="{{ config.max_post_length }}" min="1" max="32000"></td></tr>
+        <tr class="cfg-section-header"><td colspan="2">Posting Behaviour</td></tr>
+        <tr><td class="cfg-label"><strong>Force Anonymous</strong><span class="cfg-desc">Name field hidden; all posts show as Anonymous.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="forced_anon" {% if config.forced_anon %}checked{% endif %}></td></tr>
+        <tr><td class="cfg-label"><strong>Allow sage</strong><span class="cfg-desc">Posters can prevent bumping by setting email to sage.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="allow_sage" {% if config.allow_sage %}checked{% endif %}></td></tr>
+        <tr><td class="cfg-label"><strong>Allow tripcodes</strong><span class="cfg-desc">Enable ##tripcode identifiers in the name field.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="allow_tripcodes" {% if config.allow_tripcodes %}checked{% endif %}></td></tr>
+        <tr><td class="cfg-label"><strong>Require CAPTCHA</strong><span class="cfg-desc">Require CAPTCHA verification on every post.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="captcha_required" {% if config.captcha_required %}checked{% endif %}></td></tr>
+        <tr><td class="cfg-label"><strong>NSFW Board</strong><span class="cfg-desc">Mark this board as adult content.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="nsfw" {% if config.nsfw %}checked{% endif %}></td></tr>
+        <tr class="cfg-section-header"><td colspan="2">Rate Limiting</td></tr>
+        <tr><td class="cfg-label"><strong>Enable rate limiting</strong><span class="cfg-desc">Enforce per-IP post rate limits.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="rate_limit_enabled" {% if config.rate_limit_enabled %}checked{% endif %}></td></tr>
+        <tr><td class="cfg-label"><strong>Rate limit window (s)</strong><span class="cfg-desc">Rolling window duration in seconds.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" data-key="rate_limit_window_secs" value="{{ config.rate_limit_window_secs }}" min="1"></td></tr>
+        <tr><td class="cfg-label"><strong>Posts per window</strong><span class="cfg-desc">Maximum posts per IP within the window.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" data-key="rate_limit_posts" value="{{ config.rate_limit_posts }}" min="1"></td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:.8rem">
+      <button class="btn-reply" onclick="saveOwnerConfig()">Save Config</button>
+      <span id="owner-cfg-status" style="font-size:.9em;margin-left:.8rem"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ── Board Volunteers ──────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Board Volunteers</h2>
+  <p style="font-size:.9em;color:#666">Volunteers can delete posts and issue bans on this board. They cannot change board config.</p>
+  <div id="volunteers-section">
+    <table class="mod-table" id="volunteers-table">
+      <thead><tr><th>Username</th><th>Assigned</th><th>Actions</th></tr></thead>
+      <tbody id="volunteers-tbody"><tr><td colspan="3" style="color:#888">Loading…</td></tr></tbody>
+    </table>
+    <div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <input type="text" id="vol-username" placeholder="Username to add" style="padding:.3rem .5rem;border:1px solid var(--border)">
+      <button class="btn-reply" onclick="addVolunteer()">Add Volunteer</button>
+      <span id="vol-status" style="font-size:.9em"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ── Pending flags for this board ───────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Pending Flags <a href="/mod/flags" style="font-size:.8em;font-weight:normal">[View all →]</a></h2>
+  <div id="board-flags"><p style="color:#888;font-size:.9em">Loading…</p></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var BOARD_ID   = '{{ board.id }}';
+var BOARD_SLUG = '{{ board.slug }}';
+
+function saveOwnerConfig() {
+  var patch = {};
+  document.querySelectorAll('.cfg-field').forEach(function(el) {
+    var key = el.dataset.key;
+    if (!key) return;
+    if (el.type === 'checkbox') {
+      patch[key] = el.checked;
+    } else if (el.type === 'number') {
+      var v = parseFloat(el.value);
+      if (!isNaN(v)) patch[key] = v;
+    }
+  });
+  if ('max_file_size' in patch) { patch['max_file_size_kb'] = patch['max_file_size']; delete patch['max_file_size']; }
+
+  var status = document.getElementById('owner-cfg-status');
+  status.textContent = 'Saving…';
+
+  fetch('/board/' + BOARD_SLUG + '/config', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+    body: JSON.stringify(patch)
+  }).then(function(r) {
+    status.textContent = (r.ok || r.status === 200) ? '✓ Saved' : 'Error ' + r.status;
+    setTimeout(function() { status.textContent = ''; }, 2500);
+  }).catch(function(e) { status.textContent = 'Network error: ' + e; });
+}
+
+// Load board volunteers
+(function loadVolunteers() {
+  fetch('/board/' + BOARD_SLUG + '/volunteers', {headers: {'Accept': 'application/json'}})
+    .then(function(r) { return r.ok ? r.json() : []; })
+    .then(function(vols) {
+      var tbody = document.getElementById('volunteers-tbody');
+      if (!vols || !vols.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:#888">No volunteers assigned.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = vols.map(function(v) {
+        return '<tr id="vol-row-' + v.user_id + '">' +
+          '<td>' + v.username + '</td>' +
+          '<td>' + v.assigned_at + '</td>' +
+          '<td><button class="btn-mod btn-reject" onclick="removeVolunteer('' + v.user_id + '',this)">Remove</button></td>' +
+          '</tr>';
+      }).join('');
+    })
+    .catch(function() {
+      document.getElementById('volunteers-tbody').innerHTML =
+        '<tr><td colspan="3" style="color:#888">Could not load volunteers.</td></tr>';
+    });
+})();
+
+function addVolunteer() {
+  var username = document.getElementById('vol-username').value.trim();
+  var status   = document.getElementById('vol-status');
+  if (!username) { status.textContent = 'Enter a username.'; return; }
+  status.textContent = 'Adding…';
+  fetch('/board/' + BOARD_SLUG + '/volunteers', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username: username})
+  }).then(function(r) {
+    if (r.ok || r.status === 201) {
+      status.textContent = '✓ Added';
+      document.getElementById('vol-username').value = '';
+      setTimeout(function() { location.reload(); }, 800);
+    } else {
+      r.text().then(function(t) { status.textContent = 'Error: ' + t; });
+    }
+  }).catch(function(e) { status.textContent = 'Network error.'; });
+}
+
+function removeVolunteer(userId, btn) {
+  btn.disabled = true;
+  fetch('/board/' + BOARD_SLUG + '/volunteers/' + userId, {method: 'DELETE'})
+    .then(function(r) {
+      if (r.ok || r.status === 204) {
+        var row = document.getElementById('vol-row-' + userId);
+        if (row) row.style.opacity = '.4';
+      } else { btn.disabled = false; }
+    })
+    .catch(function() { btn.disabled = false; });
+}
+
+// Load pending flags for this board
+fetch('/mod/flags?page=1', {headers: {'Accept': 'application/json'}})
+  .then(function(r) { return r.ok ? r.json() : null; })
+  .then(function(data) {
+    var el = document.getElementById('board-flags');
+    if (!data || !data.items || !data.items.length) {
+      el.innerHTML = '<p>No pending flags.</p>'; return;
+    }
+    var rows = data.items.map(function(f) {
+      return '<tr><td><code>' + f.post_id + '</code></td>' +
+        '<td>' + f.reason + '</td>' +
+        '<td>' + f.created_at + '</td>' +
+        '<td>' +
+          '<button class="btn-mod btn-approve" onclick="resolveFlag(\'' + f.id + '\',\'approved\',this)">Approve</button> ' +
+          '<button class="btn-mod btn-reject"  onclick="resolveFlag(\'' + f.id + '\',\'rejected\',this)">Dismiss</button>' +
+        '</td></tr>';
+    }).join('');
+    el.innerHTML = '<table class="mod-table"><thead><tr>' +
+      '<th>Post</th><th>Reason</th><th>When</th><th>Action</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+  })
+  .catch(function() {});
+
+function resolveFlag(id, resolution, btn) {
+  btn.disabled = true;
+  fetch('/mod/flags/' + id + '/resolve', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({resolution: resolution})
+  }).then(function(r) {
+    if (r.ok || r.status === 204) {
+      var row = btn.closest('tr');
+      if (row) row.style.opacity = '.4';
+    } else { btn.disabled = false; }
+  }).catch(function() { btn.disabled = false; });
+}
+</script>
+{% endblock %}

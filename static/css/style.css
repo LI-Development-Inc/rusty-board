@@ -1,0 +1,1276 @@
+/* rusty-board — base stylesheet */
+/* Minimal, accessible, performance-first. No JavaScript dependencies. */
+
+/* ── Reset & base ──────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --color-bg:       #f8f1e0;
+  --color-surface:  #fdf6e3;
+  --color-border:   #c8b88a;
+  --color-text:     #2c2c2c;
+  --color-muted:    #7a7a6a;
+  --color-link:     #1a5276;
+  --color-link-vis: #78281f;
+  --color-accent:   #7b241c;
+  --color-op-bg:    #eaf3e7;
+  --color-reply-bg: #fdf6e3;
+  --color-header:   #c8b88a;
+  --color-quote:    #789922;
+  --font-mono:      "Courier New", Courier, monospace;
+  --font-sans:      system-ui, -apple-system, sans-serif;
+  --border-radius:  2px;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+a {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+a:visited {
+  color: var(--color-link-vis);
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+
+.site-header {
+  background: var(--color-header);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.5rem 1rem;
+}
+
+.site-header nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.site-header .site-name {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.content {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.site-footer {
+  text-align: center;
+  padding: 1rem;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+/* ── Board header ───────────────────────────────────────────────────────────── */
+
+.board-header {
+  text-align: center;
+  padding: 0.5rem 0 1rem;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: 1rem;
+}
+
+.board-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.6rem;
+}
+
+.board-rules {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+/* ── Post form ──────────────────────────────────────────────────────────────── */
+
+.post-form {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.post-form h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  align-items: center;
+}
+
+.form-row label {
+  min-width: 80px;
+  font-weight: bold;
+}
+
+.form-row input[type="text"],
+.form-row input[type="email"] {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-family: var(--font-sans);
+  font-size: inherit;
+}
+
+.post-form textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.post-form button[type="submit"] {
+  padding: 0.4rem 1rem;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.post-form button[type="submit"]:hover {
+  opacity: 0.85;
+}
+
+/* ── Thread list ────────────────────────────────────────────────────────────── */
+
+.thread-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── Thread & posts ─────────────────────────────────────────────────────────── */
+
+.thread {
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.op-post {
+  background: var(--color-op-bg);
+  padding: 0.75rem;
+}
+
+.reply-post {
+  background: var(--color-reply-bg);
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.post-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+  color: var(--color-muted);
+}
+
+.post-header .post-number {
+  font-weight: bold;
+  color: var(--color-link);
+}
+
+.post-header .poster-name {
+  font-weight: bold;
+  color: #117711;
+}
+
+/* ── Tripcodes ───────────────────────────────────────────────────────────── */
+
+.post-name {
+  font-weight: bold;
+  color: #117711;
+}
+
+.post-tripcode {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  color: #888;
+  letter-spacing: 0.03em;
+}
+
+/* !! secure tripcodes get slightly stronger emphasis */
+.post-tripcode[data-level="secure"] {
+  color: #666;
+}
+
+/* ── Capcodes ─────────────────────────────────────────────────────────────── */
+/*
+ * Capcodes verify staff authority. The `!!!! Role` badge is rendered with
+ * role-specific colours so readers can instantly distinguish Admin from
+ * Janitor from Board Owner from Volunteer.
+ *
+ * CSS classes applied:  post-capcode  +  capcode--{role}
+ *   admin          → deep red    (#8b0000 bg, white text)
+ *   janitor        → dark blue   (#003580 bg, white text)
+ *   board-owner    → deep teal   (#005555 bg, white text)
+ *   volunteer      → dark olive  (#4a4a00 bg, white text)
+ *   developer      → deep purple (#3a0070 bg, white text)
+ */
+
+.post-capcode {
+  display: inline-block;
+  padding: 0.1em 0.45em;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: #555;            /* fallback */
+  border: 1px solid rgba(0,0,0,0.25);
+  vertical-align: middle;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.post-capcode::before {
+  content: "▮ ";
+  font-size: 0.7em;
+  opacity: 0.7;
+}
+
+.capcode--admin {
+  background: #8b0000;
+  border-color: #5a0000;
+  box-shadow: 0 0 0 1px rgba(255,80,80,0.25);
+}
+
+.capcode--janitor {
+  background: #003580;
+  border-color: #002050;
+}
+
+.capcode--board-owner {
+  background: #005555;
+  border-color: #003a3a;
+}
+
+.capcode--volunteer {
+  background: #4a4a00;
+  border-color: #2e2e00;
+}
+
+.capcode--developer {
+  background: #3a0070;
+  border-color: #250048;
+  box-shadow: 0 0 0 1px rgba(180,100,255,0.2);
+}
+
+/* Dark mode adjustments — lighten backgrounds slightly */
+@media (prefers-color-scheme: dark) {
+  .capcode--admin     { background: #a01010; }
+  .capcode--janitor   { background: #1040a0; }
+  .capcode--board-owner { background: #007070; }
+  .capcode--volunteer { background: #666600; }
+  .capcode--developer { background: #5500aa; }
+}
+
+
+
+.post-header time {
+  color: var(--color-muted);
+}
+
+.post-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.post-body .greentext {
+  color: var(--color-quote);
+}
+
+.post-body .quote-link {
+  color: var(--color-link);
+  font-weight: bold;
+}
+
+/* ── Attachments ─────────────────────────────────────────────────────────────── */
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.attachment {
+  display: block;
+  max-width: 200px;
+}
+
+.attachment img {
+  display: block;
+  max-width: 200px;
+  max-height: 200px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+}
+
+/* ── Catalog ─────────────────────────────────────────────────────────────────── */
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.catalog-item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.catalog-item img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: var(--border-radius);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.catalog-item .reply-count {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.catalog-item .op-preview {
+  font-size: 0.8rem;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  text-align: left;
+}
+
+/* ── Pagination ──────────────────────────────────────────────────────────────── */
+
+.pagination {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.pagination a,
+.pagination .current-page {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 0.9rem;
+}
+
+.pagination .current-page {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+/* ── Sticky / Closed badges ──────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.badge-sticky {
+  background: #f9e6a0;
+  border: 1px solid #c8a000;
+  color: #7a5000;
+}
+
+.badge-closed {
+  background: #f4cccc;
+  border: 1px solid #c0392b;
+  color: #7b241c;
+}
+
+/* ── Dashboard tables ────────────────────────────────────────────────────────── */
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.admin-table th {
+  background: var(--color-header);
+  font-weight: bold;
+}
+
+.admin-table tr:nth-child(even) td {
+  background: var(--color-surface);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .form-row label {
+    min-width: auto;
+  }
+  .catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
+
+/* ── Nav additions ─────────────────────────────────────────────────────────── */
+.site-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+  padding: 0.4rem 1rem;
+  background: var(--color-header);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-nav a {
+  white-space: nowrap;
+}
+
+.nav-sep { color: var(--color-muted); }
+
+.nav-right {
+  margin-left: auto;
+}
+
+/* ── Thread OP preview on board index ─────────────────────────────────────── */
+.op-preview {
+  max-height: 6em;
+  overflow: hidden;
+  position: relative;
+  color: var(--color-text);
+  margin: 0.4rem 0;
+}
+
+.thread-footer {
+  font-size: 0.85em;
+  color: var(--color-muted);
+  margin-top: 0.3rem;
+}
+
+.thread-sep {
+  border: none;
+  border-top: 1px dashed var(--color-border);
+  margin: 0.8rem 0;
+}
+
+.thread-link, .post-link {
+  font-size: 0.9em;
+  margin-left: 0.5rem;
+}
+
+/* ── Reply/OP post distinction ─────────────────────────────────────────────── */
+.op-post {
+  background: var(--color-op-bg);
+  padding: 0.5rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 0.5rem;
+}
+
+.reply-post {
+  background: var(--color-reply-bg);
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--color-border);
+  margin: 0.3rem 0 0.3rem 1rem;
+}
+
+/* ── Collapsible form (details/summary) ─────────────────────────────────────── */
+.new-thread-form details,
+.reply-form details {
+  margin-bottom: 1rem;
+}
+
+.new-thread-form summary,
+.reply-form summary {
+  cursor: pointer;
+  font-weight: bold;
+  color: var(--color-link);
+  padding: 0.3rem 0;
+}
+
+/* ── Thread bottom nav ─────────────────────────────────────────────────────── */
+.thread-bottom-nav {
+  margin-top: 1.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Login form ─────────────────────────────────────────────────────────────── */
+.login-form {
+  max-width: 400px;
+  margin: 2rem auto;
+}
+
+.login-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.error {
+  color: var(--color-accent);
+  background: #fff0f0;
+  border: 1px solid var(--color-accent);
+  padding: 0.5rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 0.5rem;
+}
+
+/* ── Footer nav ─────────────────────────────────────────────────────────────── */
+.footer-nav {
+  text-align: center;
+  font-size: 0.85em;
+}
+
+/* ── Form vertical layout ────────────────────────────────────────────────────── */
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9em;
+}
+
+.form-label input,
+.form-label textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.form-row .form-label {
+  flex: 1;
+  min-width: 160px;
+}
+
+.reply-form form,
+.new-thread-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 700px;
+  padding: 0.5rem 0;
+}
+
+.btn-reply {
+  background: var(--color-op-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 0.3rem 1rem;
+  cursor: pointer;
+  font-family: inherit;
+  align-self: flex-start;
+}
+.btn-reply:hover { background: var(--color-accent); color: #fff; }
+
+/* ── Poster ID badge ──────────────────────────────────────────────────────────── */
+.poster-id {
+  display: inline-block;
+  background: #e8c840;
+  color: #333;
+  font-size: 0.78em;
+  font-family: monospace;
+  padding: 0 0.3rem;
+  border-radius: 2px;
+  margin-left: 0.3rem;
+  cursor: help;
+}
+
+/* ── Floating Quick Reply box ────────────────────────────────────────────────── */
+.quick-reply {
+  display: none;
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 340px;
+  background: var(--color-bg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  z-index: 1000;
+}
+
+.qr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-op-bg);
+  padding: 0.4rem 0.6rem;
+  cursor: move;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.qr-close {
+  font-size: 1.1em;
+  color: var(--color-text);
+  text-decoration: none;
+  padding: 0 0.2rem;
+}
+
+.quick-reply form {
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.qr-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.85em;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border);
+}
+
+.qr-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.9em;
+  padding: 0.3rem;
+  border: 1px solid var(--color-border);
+  resize: vertical;
+  min-height: 80px;
+}
+
+.qr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.qr-file { font-size: 0.8em; }
+
+/* ── Flag modal ───────────────────────────────────────────────────────────────── */
+.flag-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+}
+
+.flag-modal-inner {
+  background: var(--color-bg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  width: min(380px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.flag-modal-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+
+/* ── Board tag on overboard ──────────────────────────────────────────────────── */
+.board-tag {
+  font-weight: bold;
+  margin-right: 0.3rem;
+  font-size: 0.85em;
+  background: var(--color-op-bg);
+  padding: 0 0.3rem;
+  border-radius: 2px;
+}
+
+/* ── Login form ──────────────────────────────────────────────────────────────── */
+.login-form {
+  max-width: 360px;
+  margin: 2rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ── Post images ─────────────────────────────────────────────────────────────── */
+.post-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.post-image {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.post-thumb {
+  max-width: 200px;
+  max-height: 200px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: block;
+}
+
+.post-thumb:hover {
+  opacity: 0.85;
+}
+
+.image-info {
+  font-size: 0.75em;
+  color: var(--color-date, #888);
+  max-width: 200px;
+  word-break: break-all;
+  text-align: center;
+}
+
+/* ── >>N quote links ─────────────────────────────────────────────────────────── */
+.post-quote-link {
+  color: #d00;
+  font-weight: bold;
+}
+
+.post-quote-link:hover {
+  text-decoration: underline;
+}
+
+.quote-preview {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  max-width: 420px;
+  background: var(--bg-post, #f0e0d6);
+  border: 1px solid var(--border, #d9bfb7);
+  padding: 0.5rem;
+  font-size: 0.85em;
+  pointer-events: none;
+  box-shadow: 2px 2px 6px rgba(0,0,0,.2);
+}
+
+/* ── Settings panel ──────────────────────────────────────────────────────────── */
+#settings-panel {
+  display: none;
+  position: fixed;
+  top: 40px;
+  right: 8px;
+  z-index: 8000;
+  background: var(--bg-post, #f0e0d6);
+  border: 1px solid var(--border, #d9bfb7);
+  box-shadow: 2px 2px 8px rgba(0,0,0,.2);
+}
+
+#settings-inner {
+  padding: 0.8rem 1rem;
+  min-width: 200px;
+}
+
+#settings-btn {
+  cursor: pointer;
+}
+
+/* ── Mod tables ──────────────────────────────────────────────────────────────── */
+.mod-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin: 1rem 0;
+}
+
+.mod-table th, .mod-table td {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border, #d9bfb7);
+  text-align: left;
+  vertical-align: top;
+}
+
+.mod-table th {
+  background: var(--bg-header, #ddd);
+  font-weight: bold;
+}
+
+.mod-table tr:nth-child(even) {
+  background: var(--bg-even, #f8f4ee);
+}
+
+.btn-mod {
+  font-size: 0.8em;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  border: 1px solid var(--border, #999);
+  background: var(--bg-post, #f0e0d6);
+}
+
+.btn-approve { border-color: #4a4; color: #4a4; }
+.btn-reject  { border-color: #a44; color: #a44; }
+
+/* ── Cross-board quote links ─────────────────────────────────────────────────── */
+.post-quote-link.cross-board {
+  color: #a00;
+}
+
+/* ── Other-boards nav ────────────────────────────────────────────────────────── */
+.nav-other-boards {
+  font-size: 0.95em;
+}
+
+/* ── Dashboard stat cards ─────────────────────────────────────────────────────── */
+.stat-card {
+  border: 1px solid var(--border, #d9bfb7);
+  padding: 1rem 1.5rem;
+  min-width: 120px;
+  background: var(--bg-post, #f0e0d6);
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: bold;
+  display: block;
+}
+
+.stat-label {
+  font-size: 0.85em;
+  color: var(--color-date, #888);
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.mod-nav {
+  display: flex;
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+/* ── Admin sections ──────────────────────────────────────────────────────────── */
+.admin-section {
+  margin-bottom: 2.5rem;
+}
+
+/* ── Board config modal ──────────────────────────────────────────────────────── */
+.cfg-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfg-modal-box {
+  background: var(--bg-post, #f0e0d6);
+  border: 1px solid var(--border, #d9bfb7);
+  box-shadow: 0 4px 24px rgba(0,0,0,.25);
+  width: min(700px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.cfg-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .7rem 1rem;
+  border-bottom: 1px solid var(--border, #d9bfb7);
+  background: var(--bg-header, #e8d5c8);
+  font-size: 1.05em;
+}
+
+.cfg-close {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0 .3rem;
+  color: var(--color-link, #d00);
+}
+
+.cfg-modal-body {
+  overflow-y: auto;
+  padding: .5rem 1rem;
+  flex: 1;
+}
+
+.cfg-modal-footer {
+  padding: .7rem 1rem;
+  border-top: 1px solid var(--border, #d9bfb7);
+  background: var(--bg-header, #e8d5c8);
+}
+
+/* Config table inside modal */
+.cfg-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cfg-table tr {
+  border-bottom: 1px solid var(--border, #d9bfb7);
+}
+
+.cfg-section-header td {
+  background: var(--bg-header, #ddd);
+  font-weight: bold;
+  font-size: .85em;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: .35rem .6rem;
+  color: #555;
+}
+
+.cfg-label {
+  padding: .55rem .6rem;
+  width: 60%;
+  vertical-align: top;
+}
+
+.cfg-desc {
+  font-size: .82em;
+  color: #666;
+  display: block;
+  margin-top: .1rem;
+}
+
+.cfg-control {
+  padding: .55rem .6rem;
+  vertical-align: middle;
+  text-align: right;
+}
+
+.cfg-number {
+  width: 100px;
+  text-align: right;
+  padding: .25rem .4rem;
+  border: 1px solid var(--border, #ccc);
+  background: #fff;
+}
+
+/* Scale checkbox to be more visible */
+.cfg-field[type="checkbox"] {
+  width: 1.1em;
+  height: 1.1em;
+  cursor: pointer;
+}
+
+/* ── Unified Dashboard ──────────────────────────────────────────────────── */
+
+.dash-empty {
+  color: #888;
+  font-size: .9em;
+  margin: .4rem 0;
+}
+
+.dash-actions {
+  white-space: nowrap;
+}
+
+.dash-actions a,
+.dash-actions button {
+  margin-right: .35rem;
+}
+
+/* Announcements section */
+.dash-announcements {
+  border-left: 3px solid var(--link, #0000ee);
+}
+
+.announcement-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.announcement-item {
+  padding: .4rem .5rem;
+  border-bottom: 1px solid var(--border, #ccc);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.announcement-item:last-child {
+  border-bottom: none;
+}
+
+.announcement-unread {
+  background: #fffbe6;
+  font-weight: bold;
+}
+
+.announcement-body {
+  flex: 1;
+}
+
+.announcement-meta {
+  font-size: .8em;
+  color: #888;
+  white-space: nowrap;
+}
+
+/* Unread message badge */
+.unread-badge {
+  display: inline-block;
+  background: #c00;
+  color: #fff;
+  font-size: .75em;
+  font-weight: bold;
+  border-radius: 999px;
+  padding: .1em .45em;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+/* Messages preview */
+.dash-messages h2 {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
+.message-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.message-preview {
+  padding: .35rem .5rem;
+  border-bottom: 1px solid var(--border, #ccc);
+  display: grid;
+  grid-template-columns: 8rem 1fr 9rem;
+  gap: .5rem;
+  align-items: baseline;
+  font-size: .9em;
+}
+
+.message-preview:last-child {
+  border-bottom: none;
+}
+
+.message-unread {
+  background: #fffbe6;
+}
+
+.msg-from {
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-body {
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-time {
+  font-size: .8em;
+  color: #888;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Post body preview in Recent Posts table */
+.post-body-preview {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .9em;
+}
+
+/* ── Unified Dashboard Layout ─────────────────────────────────────────────── */
+
+.dashboard {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 .5rem 3rem;
+}
+
+.dash-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding-bottom: .6rem;
+  border-bottom: 2px solid var(--border, #d9bfb7);
+}
+
+.dash-header h1 {
+  margin: 0;
+}
+
+.dash-identity {
+  font-size: .9em;
+  color: #666;
+}
+
+/* Each dashboard section */
+.dash-section {
+  margin-bottom: 2.5rem;
+}
+
+.dash-section-title {
+  font-size: 1em;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin: 0 0 .6rem;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--border, #d9bfb7);
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+
+/* Small action link in section heading (e.g. [+ New Board]) */
+.section-action {
+  font-size: .8em;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: normal;
+}
+
+/* Small nav link in section heading (e.g. [Full log →]) */
+.section-link {
+  font-size: .8em;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: normal;
+  color: var(--color-link, #00e);
+}
+
+/* Muted placeholder text */
+.dash-muted {
+  color: #888;
+  font-size: .9em;
+  font-style: italic;
+  margin: .4rem 0;
+}
+
+/* Count badge in section headings (e.g. "3 pending") */
+.dash-badge {
+  display: inline-block;
+  background: #c00;
+  color: #fff;
+  font-size: .72em;
+  font-weight: bold;
+  border-radius: 999px;
+  padding: .1em .5em;
+  vertical-align: middle;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Volunteer group within Staff section */
+.dash-volunteer-group {
+  margin-bottom: 1.2rem;
+  padding-bottom: .8rem;
+  border-bottom: 1px dashed var(--border, #ddd);
+}
+
+.dash-volunteer-group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.dash-subheading {
+  font-size: .9em;
+  margin: 0 0 .4rem;
+  color: #555;
+}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}{{ role_label }} Audit Log{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+  <header class="dash-header">
+    <h1 class="dash-title">{{ role_label }} Audit Log</h1>
+    <nav class="dash-nav">
+      <a href="/mod/dashboard">← Dashboard</a>
+    </nav>
+  </header>
+
+  <section class="dash-section">
+    <table class="mod-table audit-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Actor</th>
+          <th>Action</th>
+          <th>Target</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries.items %}
+        <tr>
+          <td class="audit-ts">{{ entry.created_at }}</td>
+          <td>
+            {% if let Some(a) = entry.actor_id %}
+              <code class="audit-id">{{ a }}</code>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td><span class="audit-action">{{ entry.action }}</span></td>
+          <td>
+            {% if let Some(t) = entry.target_id %}
+              <code class="audit-id">{{ t }}</code>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+            {% if let Some(tt) = entry.target_type %}
+              <span class="audit-type">({{ tt }})</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if let Some(d) = entry.details %}
+              <code class="audit-details">{{ d }}</code>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if entries.items.is_empty() %}
+        <tr><td colspan="5" class="muted center">No log entries found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    {# ── Pagination ───────────────────────────────────────────────────────── #}
+    {% if entries.total_pages > 1 %}
+    <nav class="pagination" aria-label="Audit log pages">
+      {% if entries.page > 1 %}
+        <a href="?page={{ entries.page - 1 }}" class="page-link">← Previous</a>
+      {% endif %}
+      <span class="page-info">Page {{ entries.page }} of {{ entries.total_pages }}</span>
+      {% if entries.page < entries.total_pages %}
+        <a href="?page={{ entries.page + 1 }}" class="page-link">Next →</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Inbox — rusty-board{% endblock %}
+
+{% block nav_right %}| <a href="/mod/dashboard">[dashboard]</a> <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+  <div class="dashboard-header">
+    <h2>📥 Inbox</h2>
+    <a href="/mod/dashboard" class="btn-back">[← Dashboard]</a>
+  </div>
+
+  {% if messages.is_empty() %}
+  <p style="color:var(--fg-muted,#888);padding:1rem 0">No messages.</p>
+  {% else %}
+  <table class="mod-table" style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:.4rem .6rem">From</th>
+        <th style="text-align:left;padding:.4rem .6rem">Preview</th>
+        <th style="text-align:left;padding:.4rem .6rem">Received</th>
+        <th style="padding:.4rem .6rem"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for msg in messages %}
+    <tr class="{% if msg.read_at.is_none() %}msg-unread{% endif %}"
+        id="msg-{{ msg.id }}"
+        style="{% if msg.read_at.is_none() %}font-weight:bold{% endif %}">
+      <td style="padding:.4rem .6rem">{{ msg.from_user_id }}</td>
+      <td style="padding:.4rem .6rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        {{ msg.body|truncate(80) }}
+      </td>
+      <td style="padding:.4rem .6rem;white-space:nowrap;font-size:.85em">{{ msg.created_at }}</td>
+      <td style="padding:.4rem .6rem">
+        {% if msg.read_at.is_none() %}
+        <button class="btn-mark-read" data-id="{{ msg.id }}" style="font-size:.8em">Mark read</button>
+        {% else %}
+        <span style="color:var(--fg-muted,#888);font-size:.8em">read</span>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="4" style="padding:.3rem .6rem 1rem 1.5rem;white-space:pre-wrap;font-size:.9em;border-bottom:1px solid var(--border,#ccc)">{{ msg.body }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div style="margin-top:1.5rem">
+    <a href="/staff/messages/new">[+ New Message]</a>
+    {% if total_pages > 1 %}
+    <span style="margin-left:1rem">
+      {% if current_page > 1 %}
+      <a href="/staff/messages?page={{ current_page - 1 }}">[← Prev]</a>
+      {% endif %}
+      Page {{ current_page }}/{{ total_pages }}
+      {% if current_page < total_pages %}
+      <a href="/staff/messages?page={{ current_page + 1 }}">[Next →]</a>
+      {% endif %}
+    </span>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.btn-mark-read');
+  if (!btn) return;
+  var id = btn.dataset.id;
+  btn.disabled = true;
+  fetch('/staff/messages/' + id + '/read', {
+    method: 'POST', credentials: 'same-origin'
+  }).then(function(r) {
+    if (r.ok || r.status === 204) {
+      var row = document.getElementById('msg-' + id);
+      if (row) { row.style.fontWeight = ''; row.classList.remove('msg-unread'); }
+      btn.parentNode.innerHTML = '<span style="color:var(--fg-muted,#888);font-size:.8em">read</span>';
+    }
+  }).catch(function() { btn.disabled = false; });
+});
+</script>
+{% endblock %}

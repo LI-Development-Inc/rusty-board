@@ -1,0 +1,47 @@
+[package]
+name    = "rusty-board"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rusty-board"
+path = "src/main.rs"
+
+# The default feature combination: Axum + Postgres + JWT + local media + Redis
+[features]
+default = ["web-axum", "db-postgres", "auth-jwt", "media-local", "redis"]
+web-axum   = [
+    "api-adapters/web-axum",
+    "storage-adapters/db-postgres",
+]
+web-actix  = ["api-adapters/web-actix"]
+db-postgres = ["storage-adapters/db-postgres", "configs/db-postgres"]
+db-sqlite   = []
+auth-jwt    = ["auth-adapters/auth-jwt", "configs/auth-jwt"]
+auth-cookie = ["auth-adapters/auth-cookie"]
+media-s3    = ["storage-adapters/media-s3", "configs/media-s3"]
+media-local = ["storage-adapters/media-local", "configs/media-local"]
+video       = ["storage-adapters/video"]
+documents   = ["storage-adapters/documents"]
+redis       = ["storage-adapters/redis", "configs/redis"]
+
+[dependencies]
+domains          = { path = "../../crates/domains" }
+services         = { path = "../../crates/services" }
+storage-adapters = { path = "../../crates/storage-adapters" }
+auth-adapters    = { path = "../../crates/auth-adapters" }
+api-adapters     = { path = "../../crates/api-adapters" }
+configs          = { path = "../../crates/configs" }
+
+tokio            = { workspace = true }
+async-trait      = { workspace = true }
+tracing          = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow           = { workspace = true }
+prometheus-client = { workspace = true }
+secrecy          = { workspace = true }
+sqlx             = { workspace = true }
+deadpool-redis   = { workspace = true }
+axum             = { workspace = true }
+tower-http       = { workspace = true }
+rustls           = { workspace = true }

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}User Dashboard — rusty-board{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+
+  <header class="dash-header">
+    <h1>User Dashboard</h1>
+    <span class="dash-identity">{{ username }}</span>
+  </header>
+
+  <!-- ── Account Status ──────────────────────────────────────────────── -->
+  <section class="dash-section" id="dash-status">
+    <h2 class="dash-section-title">Account Status</h2>
+    <table class="mod-table" style="max-width:28rem">
+      <tbody>
+        <tr><th>Username</th><td>{{ username }}</td></tr>
+        <tr><th>Role</th><td>User</td></tr>
+        <tr><th>Member since</th><td>{{ joined_at }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Staff Requests ─────────────────────────────────────────────── -->
+  <section class="dash-section" id="dash-requests">
+    <h2 class="dash-section-title">Staff Requests</h2>
+    {% if pending_requests.is_empty() %}
+      <p class="dash-muted">No pending requests.</p>
+    {% else %}
+    <table class="mod-table">
+      <thead>
+        <tr><th>Type</th><th>Target</th><th>Status</th><th>Submitted</th><th>Note</th></tr>
+      </thead>
+      <tbody>
+        {% for req in pending_requests %}
+        <tr>
+          <td>{{ req.request_type }}</td>
+          <td>
+            {% if let Some(slug) = req.target_slug %}
+              /{{ slug }}/
+            {% else %}—{% endif %}
+          </td>
+          <td>{{ req.status }}</td>
+          <td>{{ req.created_at }}</td>
+          <td>{% if let Some(note) = req.review_note.as_ref() %}{{ note }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    <!-- New request form -->
+    <details style="margin-top:1rem">
+      <summary style="cursor:pointer;font-weight:bold">[+ Submit a new request]</summary>
+      <div style="margin-top:.75rem;padding:.75rem;border:1px solid var(--border)">
+        <div id="req-form-error" class="error" style="display:none"></div>
+        <label class="form-label">Request type
+          <select id="req-type">
+            <option value="board_create">Create a new board (become board owner)</option>
+            <option value="become_volunteer">Volunteer on an existing board</option>
+            <option value="become_janitor">Become a site janitor</option>
+          </select>
+        </label>
+        <div id="req-target-row" style="display:none">
+          <label class="form-label">Board slug
+            <input type="text" id="req-target" placeholder="e.g. tech">
+          </label>
+        </div>
+        <label class="form-label">
+          Pitch / notes
+          <textarea id="req-notes" rows="4" style="width:100%;box-sizing:border-box"
+                    placeholder="Briefly explain why you're making this request…"></textarea>
+        </label>
+        <button type="button" class="btn-reply" id="req-submit">[Submit Request]</button>
+      </div>
+    </details>
+  </section>
+
+  <!-- ── Messages ───────────────────────────────────────────────────── -->
+  <section class="dash-section" id="dash-messages">
+    <h2 class="dash-section-title">Messages › <a href="/staff/messages">[inbox]</a></h2>
+    <p class="dash-muted">No messages.</p>
+  </section>
+
+</div><!-- .dashboard -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var typeEl   = document.getElementById('req-type');
+  var targetRow = document.getElementById('req-target-row');
+
+  typeEl.addEventListener('change', function() {
+    targetRow.style.display = typeEl.value === 'become_volunteer' ? 'block' : 'none';
+  });
+
+  document.getElementById('req-submit').addEventListener('click', function() {
+    var type  = typeEl.value;
+    var notes = document.getElementById('req-notes').value.trim();
+    var errEl = document.getElementById('req-form-error');
+    errEl.style.display = 'none';
+
+    var body = { request_type: type, notes: notes };
+    if (type === 'become_volunteer') {
+      var slug = document.getElementById('req-target').value.trim();
+      if (!slug) {
+        errEl.textContent = 'Board slug is required for volunteer requests.';
+        errEl.style.display = 'block';
+        return;
+      }
+      body.target_slug = slug;
+    }
+
+    var btn = document.getElementById('req-submit');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    fetch('/user/requests', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    })
+    .then(function(r) {
+      if (r.ok || r.status === 201) {
+        window.location.reload();
+      } else {
+        return r.json().catch(function(){ return {}; }).then(function(b) {
+          errEl.textContent = b.message || 'Failed to submit request.';
+          errEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = '[Submit Request]';
+        });
+      }
+    })
+    .catch(function() {
+      errEl.textContent = 'Network error.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '[Submit Request]';
+    });
+  });
+})();
+</script>
+{% endblock %}

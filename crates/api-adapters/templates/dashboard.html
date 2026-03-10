@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% block title %}{{ role_display }} Dashboard — rusty-board{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  {% for db in boards %}<a href="/board/{{ db.board.slug }}">/{{ db.board.slug }}/</a> {% endfor %}
+  <span class="nav-sep">|</span>
+  <a href="/mod/dashboard">[dashboard]</a>
+{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+
+  <header class="dash-header">
+    <h1>{{ role_display }} Dashboard</h1>
+    {% if unread_count > 0 %}
+      <span class="unread-badge">{{ unread_count }} unread</span>
+    {% endif %}
+  </header>
+
+  {# ── Site Announcements ──────────────────────────────────────────────────
+     Visible when the user has staff messages addressed to them. #}
+  {% if !announcements.is_empty() %}
+  <section class="dash-section" id="dash-announcements">
+    <h2 class="dash-section-title">Site Announcements</h2>
+    <ul class="announcement-list">
+      {% for msg in announcements %}
+      <li class="announcement-item{% if msg.is_unread() %} announcement-unread{% endif %}">
+        <span class="announcement-body">{{ msg.body }}</span>
+        <span class="announcement-meta">{{ msg.created_at }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {# ── Boards ──────────────────────────────────────────────────────────────
+     Always shown. Content scoped by the handler per the user's role.
+     Admin/Janitor: all boards. BoardOwner: owned. BoardVolunteer: assigned. #}
+  <section class="dash-section" id="dash-boards">
+    <h2 class="dash-section-title">Boards</h2>
+    {% if boards.is_empty() %}
+      <p class="dash-muted">No boards assigned.</p>
+    {% else %}
+    <table class="mod-table">
+      <thead>
+        <tr>
+          <th>Board</th>
+          <th>Title</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for db in boards %}
+        <tr id="board-row-{{ db.board.id }}">
+          <td><a href="/board/{{ db.board.slug }}">/{{ db.board.slug }}/</a></td>
+          <td>{{ db.board.title }}</td>
+          <td class="dash-actions">
+            <a href="/board/{{ db.board.slug }}">[view]</a>
+            {% if db.can_manage %}
+              <a href="/board/{{ db.board.slug }}/dashboard">[manage]</a>
+            {% endif %}
+            {% if db.can_manage_volunteers %}
+              <a href="/board/{{ db.board.slug }}/dashboard#volunteers">[volunteers]</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+
+  {# ── Staff ───────────────────────────────────────────────────────────────
+     Visible to Admin (all accounts), Janitor (all, message only),
+     and BoardOwner (their volunteers). Hidden via None for other roles. #}
+  {% if let Some(staff_list) = staff %}
+  <section class="dash-section" id="dash-staff">
+    <h2 class="dash-section-title">Staff</h2>
+    {% if staff_list.is_empty() %}
+      <p class="dash-muted">No staff accounts.</p>
+    {% else %}
+    <table class="mod-table">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Active</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for du in staff_list %}
+        <tr id="user-row-{{ du.user.id }}">
+          <td>{{ du.user.username }}</td>
+          <td>{{ du.user.role }}</td>
+          <td>{% if du.user.is_active %}✓{% else %}✗{% endif %}</td>
+          <td class="dash-actions">
+            {% if du.can_message %}
+              <a href="/staff/messages/new?to={{ du.user.id }}">[message]</a>
+            {% endif %}
+            {% if du.can_deactivate %}
+              {% if du.user.is_active %}
+              <button class="btn-mod btn-reject"
+                      onclick="deactivateUser('{{ du.user.id }}','{{ du.user.username }}',this)">[deactivate]</button>
+              {% else %}
+              <span class="dash-muted">inactive</span>
+              {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ── Recent Logs ─────────────────────────────────────────────────────────
+     Scoped to the user's authority. Hidden when empty (Role::User gets empty). #}
+  {% if !recent_logs.is_empty() %}
+  <section class="dash-section" id="dash-logs">
+    <h2 class="dash-section-title">Recent Logs</h2>
+    <table class="mod-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Actor</th>
+          <th>Action</th>
+          <th>Target</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in recent_logs %}
+        <tr>
+          <td>{{ entry.created_at }}</td>
+          <td><code>{% if let Some(a) = entry.actor_id %}{{ a }}{% else %}—{% endif %}</code></td>
+          <td>{{ entry.action }}</td>
+          <td><code>{% if let Some(t) = entry.target_id %}{{ t }}{% else %}—{% endif %}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="dash-section-footer">
+      {% if role_display == "Admin" || role_display == "Janitor" %}
+        <a href="/janitor/logs" class="dash-link">Full log →</a>
+      {% else if role_display == "BoardOwner" %}
+        <a href="/board-owner/logs" class="dash-link">Full log →</a>
+      {% else if role_display == "BoardVolunteer" %}
+        <a href="/volunteer/logs" class="dash-link">Full log →</a>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── Recent Posts ────────────────────────────────────────────────────────
+     Scoped identically to Recent Logs. Hidden when empty. #}
+  {% if !recent_posts.is_empty() %}
+  <section class="dash-section" id="dash-posts">
+    <h2 class="dash-section-title">Recent Posts</h2>
+    <table class="mod-table">
+      <thead>
+        <tr>
+          <th>Board</th>
+          <th>Posted</th>
+          <th>Body</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for post in recent_posts %}
+        <tr id="post-row-{{ post.id }}">
+          <td><a href="/board/{{ post.board_slug }}">/{{ post.board_slug }}/</a></td>
+          <td>{{ post.created_at }}</td>
+          <td class="post-body-preview">{{ post.body|truncate(120) }}</td>
+          <td class="dash-actions">
+            <a href="/board/{{ post.board_slug }}/thread/{{ post.thread_id }}#post-{{ post.id }}">[view]</a>
+            <button class="btn-mod btn-reject"
+                    onclick="deletePost('{{ post.id }}',this)">[delete]</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {# ── Messages ────────────────────────────────────────────────────────────
+     Shows for all roles once staff messaging ships (v1.1). #}
+  <section class="dash-section" id="dash-messages">
+    <h2 class="dash-section-title">
+      Messages
+      {% if unread_count > 0 %}
+        <span class="unread-badge">{{ unread_count }}</span>
+      {% endif %}
+      › <a href="/staff/messages">[inbox]</a>
+    </h2>
+    {% if messages.is_empty() %}
+      <p class="dash-muted">No messages.</p>
+    {% else %}
+    <ul class="message-preview-list">
+      {% for msg in messages %}
+      <li class="message-preview{% if msg.is_unread() %} message-unread{% endif %}">
+        <span class="msg-from">{{ msg.from_user_id }}</span>
+        <span class="msg-body">{{ msg.body|truncate(80) }}</span>
+        <span class="msg-time">{{ msg.created_at }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {# ── Pending Requests ────────────────────────────────────────────────────
+     None = section absent. Admin sees all pending; BoardOwner sees volunteer
+     requests targeting their boards. #}
+  {% if let Some(requests) = pending_requests %}
+  <section class="dash-section" id="dash-requests">
+    <h2 class="dash-section-title">Pending Requests</h2>
+    {% if requests.is_empty() %}
+      <p class="dash-muted">No pending requests.</p>
+    {% else %}
+    <table class="mod-table">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>From</th>
+          <th>Target</th>
+          <th>Submitted</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for req in requests %}
+        <tr id="req-row-{{ req.id }}">
+          <td>{{ req.request_type }}</td>
+          <td><code>{{ req.from_user_id }}</code></td>
+          <td>
+            {% if let Some(slug) = req.target_slug %}
+              <a href="/board/{{ slug }}">/{{ slug }}/</a>
+            {% else %}—{% endif %}
+          </td>
+          <td>{{ req.created_at }}</td>
+          <td class="dash-actions">
+            <button class="btn-reply"
+                    onclick="approveRequest('{{ req.id }}',this)">[approve]</button>
+            <button class="btn-mod btn-reject"
+                    onclick="denyRequest('{{ req.id }}',this)">[deny]</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endif %}
+
+</div><!-- .dashboard -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Deactivate user ─────────────────────────────────────────────────── */
+function deactivateUser(id, username, btn) {
+  if (!confirm('Deactivate ' + username + '?')) return;
+  btn.disabled = true;
+  fetch('/admin/users/' + id + '/deactivate', {method: 'POST'})
+    .then(function(r) {
+      if (r.ok || r.status === 204) {
+        var row = document.getElementById('user-row-' + id);
+        if (row) {
+          row.cells[2].textContent = '✗';
+          row.cells[3].innerHTML = '<span class="dash-muted">inactive</span>';
+        }
+      } else { alert('Error ' + r.status); btn.disabled = false; }
+    })
+    .catch(function() { alert('Network error'); btn.disabled = false; });
+}
+
+/* ── Delete post ─────────────────────────────────────────────────────── */
+function deletePost(id, btn) {
+  if (!confirm('Delete this post?')) return;
+  btn.disabled = true;
+  fetch('/mod/posts/' + id, {method: 'DELETE'})
+    .then(function(r) {
+      if (r.ok || r.status === 204) {
+        var row = document.getElementById('post-row-' + id);
+        if (row) { row.style.opacity = '.4'; row.cells[3].innerHTML = '<em>deleted</em>'; }
+      } else { alert('Error ' + r.status); btn.disabled = false; }
+    })
+    .catch(function() { alert('Network error'); btn.disabled = false; });
+}
+
+/* ── Staff request approve / deny ────────────────────────────────────── */
+function approveRequest(id, btn) {
+  btn.disabled = true;
+  fetch('/admin/requests/' + id + '/approve', {method: 'POST'})
+    .then(function(r) {
+      if (r.ok || r.status === 204) {
+        var row = document.getElementById('req-row-' + id);
+        if (row) { row.style.opacity = '.4'; row.cells[4].innerHTML = '<em>approved</em>'; }
+      } else { alert('Error ' + r.status); btn.disabled = false; }
+    })
+    .catch(function() { alert('Network error'); btn.disabled = false; });
+}
+
+function denyRequest(id, btn) {
+  var note = prompt('Reason for denial (optional):');
+  if (note === null) return;
+  btn.disabled = true;
+  fetch('/admin/requests/' + id + '/deny', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({note: note || null})
+  })
+    .then(function(r) {
+      if (r.ok || r.status === 204) {
+        var row = document.getElementById('req-row-' + id);
+        if (row) { row.style.opacity = '.4'; row.cells[4].innerHTML = '<em>denied</em>'; }
+      } else { alert('Error ' + r.status); btn.disabled = false; }
+    })
+    .catch(function() { alert('Network error'); btn.disabled = false; });
+}
+</script>
+{% endblock %}

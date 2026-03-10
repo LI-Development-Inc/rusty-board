@@ -1,0 +1,13 @@
+{#- templates/components/quote.html
+    Renders a >>PostId backlink with hover preview support.
+    The JS in base.html highlights the referenced post on hover.
+
+    Context: post_id (PostId), board_slug (&str), thread_id (ThreadId)
+-#}
+<a
+  class="quote-link"
+  href="/board/{{ board_slug }}/thread/{{ thread_id }}#post-{{ post_id }}"
+  data-postid="{{ post_id }}"
+  data-threadid="{{ thread_id }}"
+  title="Jump to post {{ post_id }}"
+>&gt;&gt;{{ post_id }}</a>

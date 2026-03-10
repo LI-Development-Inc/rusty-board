@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Moderator Dashboard — rusty-board{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/mod/flags">[flags]</a>
+  <a href="/mod/bans">[bans]</a>
+  <span class="nav-sep">|</span>
+  <a href="/auth/logout">[logout]</a>
+{% endblock %}
+
+{% block content %}
+<h1>Moderator Dashboard</h1>
+
+<div class="dashboard-stats">
+  <div class="stat">
+    <span class="stat-value">{{ pending_flags }}</span>
+    <span class="stat-label">Pending Flags</span>
+    <a href="/mod/flags">[Review →]</a>
+  </div>
+</div>
+
+<nav class="mod-nav">
+  <a href="/mod/flags">[Flags]</a>
+  <a href="/mod/bans">[Bans]</a>
+</nav>
+
+<section class="recent-actions">
+  <h2>Recent Actions</h2>
+  <table>
+    <thead>
+      <tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr>
+    </thead>
+    <tbody>
+      {% for entry in recent_actions %}
+      <tr>
+        <td>{{ entry.created_at }}</td>
+        <td>{% if let Some(uid) = entry.actor_id %}{{ uid }}{% else %}anon{% endif %}</td>
+        <td>{{ entry.action }}</td>
+        <td>{% if let Some(tid) = entry.target_id %}{{ tid }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

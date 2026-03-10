@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Board Owner Dashboard — rusty-board{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  {% for board in boards %}<a href="/board/{{ board.slug }}">/{{ board.slug }}/</a> {% endfor %}
+  <span class="nav-sep">|</span>
+  <a href="/board-owner/dashboard">[dashboard]</a>
+{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<h1>Board Owner Dashboard</h1>
+
+<!-- ── My Boards ──────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>My Boards</h2>
+  {% if boards.is_empty() %}
+  <p style="color:#888">You do not own any boards.</p>
+  {% else %}
+  <table class="mod-table">
+    <thead><tr><th>Slug</th><th>Title</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for board in boards %}
+      <tr>
+        <td><a href="/board/{{ board.slug }}">/{{ board.slug }}/</a></td>
+        <td>{{ board.title }}</td>
+        <td>
+          <a href="/board/{{ board.slug }}/dashboard">[Manage →]</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<!-- ── Pending Flags ─────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Pending Flags <a href="/mod/flags" style="font-size:.8em;font-weight:normal">[View all →]</a></h2>
+  <div id="flags-body"><p style="color:#888;font-size:.9em">Loading…</p></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+fetch('/mod/flags?page=1', {headers: {'Accept': 'application/json'}})
+  .then(function(r) { return r.ok ? r.json() : null; })
+  .then(function(data) {
+    var el = document.getElementById('flags-body');
+    if (!data || !data.items || !data.items.length) {
+      el.innerHTML = '<p style="color:#888">No pending flags.</p>'; return;
+    }
+    var rows = data.items.map(function(f) {
+      return '<tr><td><code>' + f.post_id + '</code></td>' +
+        '<td>' + f.reason + '</td>' +
+        '<td>' + f.created_at + '</td>' +
+        '<td>' +
+          '<button class="btn-mod btn-approve" onclick="resolveFlag(\'' + f.id + '\',\'approved\',this)">Approve</button> ' +
+          '<button class="btn-mod btn-reject"  onclick="resolveFlag(\'' + f.id + '\',\'rejected\',this)">Dismiss</button>' +
+        '</td></tr>';
+    }).join('');
+    el.innerHTML = '<table class="mod-table"><thead><tr>' +
+      '<th>Post</th><th>Reason</th><th>When</th><th>Action</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+  })
+  .catch(function() {
+    document.getElementById('flags-body').innerHTML = '<p style="color:#888">Could not load.</p>';
+  });
+
+function resolveFlag(id, resolution, btn) {
+  btn.disabled = true;
+  fetch('/mod/flags/' + id + '/resolve', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({resolution: resolution})
+  }).then(function(r) {
+    if (r.ok || r.status === 204) {
+      var row = btn.closest('tr');
+      if (row) row.style.opacity = '.4';
+    } else { btn.disabled = false; }
+  }).catch(function() { btn.disabled = false; });
+}
+</script>
+{% endblock %}

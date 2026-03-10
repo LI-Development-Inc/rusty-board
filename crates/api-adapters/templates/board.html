@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}/{{ board.slug }}/ — {{ board.title }}{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/board/{{ board.slug }}">/{{ board.slug }}/</a>
+  <a href="/board/{{ board.slug }}/catalog">[catalog]</a>
+{% endblock %}
+
+{% block content %}
+<div class="board-header">
+  <h1><a href="/board/{{ board.slug }}">/{{ board.slug }}/</a> — {{ board.title }}</h1>
+  {% if !board.rules.is_empty() %}
+  <div class="board-rules"><strong>Rules:</strong> {{ board.rules }}</div>
+  {% endif %}
+  <nav class="board-nav">
+    <a href="/board/{{ board.slug }}">[Index]</a>
+    <a href="/board/{{ board.slug }}/catalog">[Catalog]</a>
+    {% if config.nsfw %}<span class="nsfw-tag">[NSFW]</span>{% endif %}
+  </nav>
+</div>
+
+<div class="new-thread-form">
+  <details>
+    <summary>New Thread</summary>
+    <form action="/board/{{ board.slug }}/post" method="POST" enctype="multipart/form-data" data-post-form>
+      <label>Name <input type="text" name="name" placeholder="Anonymous" maxlength="64"></label>
+      {% if config.allow_sage %}
+      <label>Email <input type="text" name="email" placeholder="sage to not bump" maxlength="64"></label>
+      {% endif %}
+      <label>Comment
+        <textarea name="body" maxlength="{{ config.max_post_length }}" rows="4" required></textarea>
+      </label>
+      {% if config.max_files > 0 %}
+      <label>File <input type="file" name="files" accept="image/jpeg,image/png,image/gif,image/webp"></label>
+      {% endif %}
+      <button type="submit">Post</button>
+    </form>
+  </details>
+</div>
+
+<hr>
+
+{% for thread in threads %}
+<div class="thread" id="thread-{{ thread.thread_id }}">
+  <div class="thread-op">
+    <div class="post-header">
+      <span class="post-name">Anonymous</span>
+      {% if thread.sticky %}<span class="tag sticky">[STICKY]</span>{% endif %}
+      {% if thread.closed %}<span class="tag closed">[CLOSED]</span>{% endif %}
+      <a class="post-link" href="/board/{{ board.slug }}/thread/{{ thread.thread_id }}">No.{{ thread.thread_id }}</a>
+    </div>
+    <div class="post-body op-preview">{{ thread.op_body }}</div>
+    <div class="thread-footer">
+      <span class="reply-count">
+        {{ thread.reply_count }} repl{% if thread.reply_count == 1 %}y{% else %}ies{% endif %}
+      </span>
+      — <a href="/board/{{ board.slug }}/thread/{{ thread.thread_id }}">[Open Thread →]</a>
+    </div>
+  </div>
+</div>
+<hr class="thread-sep">
+{% endfor %}
+
+<div class="pagination">
+  {% if current_page > 1 %}
+  <a href="/board/{{ board.slug }}?page={{ current_page - 1 }}">[← Prev]</a>
+  {% endif %}
+  Page {{ current_page }} of {{ total_pages }}
+  {% if current_page < total_pages %}
+  <a href="/board/{{ board.slug }}?page={{ current_page + 1 }}">[Next →]</a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Intercept new-thread form submission — convert JSON errors to toasts.
+document.addEventListener('submit', function(e) {
+  var form = e.target.closest('[data-post-form]');
+  if (!form) return;
+  e.preventDefault();
+  var btn = form.querySelector('[type=submit]');
+  var origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+
+  fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
+    .then(function(r) {
+      if (r.ok || r.status === 201) {
+        // Redirect to new thread — server returns 201 with Location or thread URL.
+        if (r.redirected) { window.location.href = r.url; return; }
+        window.location.reload();
+        return;
+      }
+      r.json().catch(function() { return {}; }).then(function(body) {
+        var msg = body.message || 'Posting failed. Please try again.';
+        if (r.status === 429)       window.rbToast.error('⏳ Rate limit — ' + msg);
+        else if (r.status === 403)  window.rbToast.error('🚫 ' + msg);
+        else                        window.rbToast.warn('⚠ ' + msg);
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+      });
+    })
+    .catch(function() {
+      window.rbToast.error('Network error — check your connection.');
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+    });
+});
+</script>
+{% endblock %}

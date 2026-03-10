@@ -1,0 +1,48 @@
+{#- templates/components/thread_preview.html
+    Renders a thread entry on the board index page.
+    Shows OP post, thumbnail, reply count, and "omitted posts" indicator.
+
+    Context: thread (Thread), op_post (Option<Post>), board_slug (&str),
+             omitted_replies (u32)
+-#}
+<div class="thread" id="thread-{{ thread.thread_id }}">
+  {% if thread.sticky %}<span class="sticky-label">📌 Sticky</span>{% endif %}
+  {% if thread.closed %}<span class="closed-label">🔒 Closed</span>{% endif %}
+
+  {#- OP post -#}
+  <div class="post op" id="post-{{ thread.op_post_id }}">
+    <div class="post-header">
+      <span class="post-subject">{{ thread.subject }}</span>
+      <span class="post-name">Anonymous</span>
+      <span class="post-date">{{ thread.created_at }}</span>
+      <a class="post-number" href="/board/{{ board_slug }}/thread/{{ thread.thread_id }}">
+        No.{{ thread.op_post_id }}
+      </a>
+      <a href="/board/{{ board_slug }}/thread/{{ thread.thread_id }}">[{{ thread.reply_count }} Replies]</a>
+    </div>
+
+    {% if let Some(thumb) = thread.thumbnail_key.as_ref() %}
+    <figure class="attachment">
+      <a href="/board/{{ board_slug }}/thread/{{ thread.thread_id }}">
+        <img class="post-thumb" src="/media/{{ thumb }}" alt="Thread image" loading="lazy">
+      </a>
+    </figure>
+    {% endif %}
+
+    <div class="post-body">
+      {% for line in thread.body_preview.lines() %}
+        {% if line.starts_with('>') %}<span class="greentext">{{ line }}</span><br>
+        {% else %}{{ line }}<br>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {#- Omitted replies indicator -#}
+  {% if thread.reply_count > 5 %}
+  <div class="omitted-indicator">
+    <em>{{ thread.reply_count - 5 }} post(s) omitted.</em>
+    <a href="/board/{{ board_slug }}/thread/{{ thread.thread_id }}">View thread →</a>
+  </div>
+  {% endif %}
+</div>

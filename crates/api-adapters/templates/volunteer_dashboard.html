@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Volunteer Dashboard — rusty-board{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/volunteer/dashboard">[dashboard]</a>
+  <a href="/mod/flags">[flags]</a>
+  <span class="nav-sep">|</span>
+{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<h1>Board Volunteer Dashboard</h1>
+<p style="color:#666;font-size:.9em">You are a board volunteer. You can delete posts and issue bans on your assigned boards.</p>
+
+<!-- ── Pending flags ──────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Pending Flags</h2>
+  <table class="mod-table">
+    <thead><tr><th>Metric</th><th>Value</th><th></th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Awaiting review</td>
+        <td><strong>{{ pending_flags }}</strong></td>
+        <td><a href="/mod/flags">[Review →]</a></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── Recent Actions ────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Recent Actions</h2>
+  {% if recent_actions.is_empty() %}
+  <p style="color:#888">No recent actions.</p>
+  {% else %}
+  <table class="mod-table">
+    <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
+    <tbody>
+      {% for entry in recent_actions %}
+      <tr>
+        <td>{{ entry.created_at }}</td>
+        <td><code>{% if let Some(uid) = entry.actor_id %}{{ uid }}{% else %}system{% endif %}</code></td>
+        <td>{{ entry.action }}</td>
+        <td><code>{% if let Some(tid) = entry.target_id %}{{ tid }}{% else %}—{% endif %}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

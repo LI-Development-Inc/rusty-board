@@ -1,0 +1,14 @@
+[package]
+name    = "seed"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "seed"
+path = "src/main.rs"
+
+[dependencies]
+auth-adapters = { path = "../../crates/auth-adapters" }
+tokio         = { workspace = true }
+sqlx          = { workspace = true }
+anyhow        = { workspace = true }

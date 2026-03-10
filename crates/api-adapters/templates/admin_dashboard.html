@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — rusty-board{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  {% for board in boards %}<a href="/board/{{ board.slug }}">/{{ board.slug }}/</a> {% endfor %}
+  <span class="nav-sep">|</span>
+  <a href="/janitor/dashboard">[staff]</a>
+{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<h1>Admin Dashboard</h1>
+
+<!-- ── Boards ──────────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Boards</h2>
+  <table class="mod-table">
+    <thead><tr><th>Slug</th><th>Title</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for board in boards %}
+      <tr id="board-row-{{ board.id }}">
+        <td><a href="/board/{{ board.slug }}">/{{ board.slug }}/</a></td>
+        <td>{{ board.title }}</td>
+        <td>
+          <button class="btn-mod" onclick="openConfig('{{ board.id }}','{{ board.slug }}')">[Config]</button>
+          <button class="btn-mod btn-reject" onclick="deleteBoard('{{ board.id }}','{{ board.slug }}',this)">[Delete]</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<!-- ── Staff Accounts ─────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Staff Accounts</h2>
+  <table class="mod-table">
+    <thead><tr><th>Username</th><th>Role</th><th>Active</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for user in users %}
+      <tr id="user-row-{{ user.id }}">
+        <td>{{ user.username }}</td>
+        <td>{{ user.role }}</td>
+        <td>{% if user.is_active %}✓{% else %}✗{% endif %}</td>
+        <td>
+          {% if user.is_active %}
+          <button class="btn-mod btn-reject" onclick="deactivateUser('{{ user.id }}','{{ user.username }}',this)">[Deactivate]</button>
+          {% else %}<span style="color:#888">Inactive</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<!-- ── Recent Audit Log ───────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>Recent Audit Log</h2>
+  <div id="audit-body"><p style="color:#888;font-size:.9em">Loading…</p></div>
+</section>
+
+<!-- ── Board Config Modal ─────────────────────────────────────────────── -->
+<div id="config-modal" style="display:none" class="cfg-modal-overlay" onclick="if(event.target===this)closeConfig()">
+  <div class="cfg-modal-box">
+    <div class="cfg-modal-header">
+      <strong id="cfg-title">Board Config</strong>
+      <button class="cfg-close" onclick="closeConfig()">✕</button>
+    </div>
+    <div id="cfg-body" class="cfg-modal-body">
+      <p>Loading…</p>
+    </div>
+    <div class="cfg-modal-footer">
+      <button class="btn-reply" id="cfg-save" onclick="saveConfig()">Save Changes</button>
+      <span id="cfg-status" style="font-size:.9em;margin-left:.8rem"></span>
+      <button class="btn-mod" onclick="closeConfig()" style="float:right">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var currentConfigBoardId = null;
+var currentConfigData    = null;
+
+/* ── Board config modal ──────────────────────────────────────────────── */
+function openConfig(boardId, slug) {
+  currentConfigBoardId = boardId;
+  document.getElementById('cfg-title').textContent = '/' + slug + '/ — Board Config';
+  document.getElementById('cfg-status').textContent = '';
+  document.getElementById('cfg-body').innerHTML = '<p>Loading…</p>';
+  document.getElementById('config-modal').style.display = 'flex';
+
+  fetch('/admin/boards/' + boardId + '/config', {headers: {'Accept': 'application/json'}})
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(cfg) {
+      currentConfigData = cfg;
+      document.getElementById('cfg-body').innerHTML = buildConfigForm(cfg);
+    })
+    .catch(function(e) {
+      document.getElementById('cfg-body').innerHTML = '<p style="color:red">Error loading config: ' + e + '</p>';
+    });
+}
+
+function closeConfig() {
+  document.getElementById('config-modal').style.display = 'none';
+  currentConfigBoardId = null;
+  currentConfigData    = null;
+}
+
+function buildConfigForm(cfg) {
+  function row(label, desc, input) {
+    return '<tr><td class="cfg-label"><strong>' + label + '</strong>' +
+           (desc ? '<br><span class="cfg-desc">' + desc + '</span>' : '') +
+           '</td><td class="cfg-control">' + input + '</td></tr>';
+  }
+  function chk(key, label, desc) {
+    return row(label, desc,
+      '<input type="checkbox" class="cfg-field" id="cfg_' + key + '" data-key="' + key + '"' +
+      (cfg[key] ? ' checked' : '') + '>');
+  }
+  function num(key, label, desc, min, max) {
+    return row(label, desc,
+      '<input type="number" class="cfg-field cfg-number" id="cfg_' + key + '" data-key="' + key + '"' +
+      ' value="' + cfg[key] + '"' + (min !== undefined ? ' min="' + min + '"' : '') +
+      (max !== undefined ? ' max="' + max + '"' : '') + '>');
+  }
+
+  return '<table class="cfg-table"><tbody>' +
+    '<tr class="cfg-section-header"><td colspan="2">Content Rules</td></tr>' +
+    num('bump_limit',    'Bump limit',      'Replies past this count no longer bump the thread.', 1) +
+    num('max_files',     'Max files',       'Maximum file attachments per post.', 1, 10) +
+    num('max_file_size', 'Max file size KB','Maximum size per attachment in KB.', 1) +
+    num('max_post_length','Max post length','Maximum post body length in characters.', 1, 32000) +
+    '<tr class="cfg-section-header"><td colspan="2">Posting Behaviour</td></tr>' +
+    chk('forced_anon',  'Force Anonymous', 'Name field is hidden; all posts display as Anonymous.') +
+    chk('allow_sage',   'Allow sage',      'Posters can prevent bumping by setting email to sage.') +
+    chk('allow_tripcodes','Allow tripcodes','Enable tripcode identifiers (##pass).') +
+    chk('captcha_required','Require CAPTCHA','Require CAPTCHA on every new post.') +
+    chk('nsfw',         'NSFW Board',      'Mark this board as adult content.') +
+    '<tr class="cfg-section-header"><td colspan="2">Rate Limiting</td></tr>' +
+    chk('rate_limit_enabled', 'Enable rate limiting', 'Enforce per-IP post rate limits.') +
+    num('rate_limit_window_secs','Rate limit window (s)','Rolling window for rate limiting.', 1) +
+    num('rate_limit_posts',     'Posts per window',     'Maximum posts per IP per window.', 1) +
+    '<tr class="cfg-section-header"><td colspan="2">Spam Filtering</td></tr>' +
+    chk('spam_filter_enabled','Enable spam filter','Run spam heuristics on new posts.') +
+    chk('duplicate_check',    'Duplicate check',    'Reject posts matching a recent post on this board.') +
+    '<tr class="cfg-section-header"><td colspan="2">Future Features</td></tr>' +
+    chk('search_enabled',    'Full-text search', 'Enable search index (ships v1.2).') +
+    chk('archive_enabled',   'Archive posts',    'Archive threads before pruning (ships v1.2).') +
+    chk('federation_enabled','Federation',       'Enable ActivityPub federation (future).') +
+    '</tbody></table>';
+}
+
+function saveConfig() {
+  if (!currentConfigBoardId || !currentConfigData) return;
+  // Build a BoardConfigUpdate — send only fields present in the form.
+  // The API uses all-optional fields; null means "leave unchanged".
+  // Note: max_file_size in config JSON maps to max_file_size_kb in the update DTO.
+  var patch = {};
+  document.querySelectorAll('.cfg-field').forEach(function(el) {
+    var key = el.dataset.key;
+    if (!key) return;
+    if (el.type === 'checkbox') {
+      patch[key] = el.checked;
+    } else if (el.type === 'number') {
+      var v = parseFloat(el.value);
+      if (!isNaN(v)) patch[key] = v;
+    }
+  });
+  // Remap field names to match BoardConfigUpdate DTO
+  if ('max_file_size' in patch) { patch['max_file_size_kb'] = patch['max_file_size']; delete patch['max_file_size']; }
+
+  var btn = document.getElementById('cfg-save');
+  var status = document.getElementById('cfg-status');
+  btn.disabled = true; status.textContent = 'Saving…';
+
+  fetch('/admin/boards/' + currentConfigBoardId + '/config', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+    body: JSON.stringify(patch)
+  }).then(function(r) {
+    if (r.ok || r.status === 200 || r.status === 204) {
+      status.textContent = '✓ Saved';
+      // Refresh the displayed config
+      return fetch('/admin/boards/' + currentConfigBoardId + '/config', {headers: {'Accept':'application/json'}})
+        .then(function(r2) { return r2.ok ? r2.json() : null; })
+        .then(function(cfg) {
+          if (cfg) { currentConfigData = cfg; document.getElementById('cfg-body').innerHTML = buildConfigForm(cfg); }
+          setTimeout(function() { status.textContent = ''; }, 2000);
+        });
+    } else {
+      return r.text().then(function(t) { status.textContent = 'Error ' + r.status + ': ' + t; });
+    }
+  }).then(function() { btn.disabled = false; })
+  .catch(function(e) {
+    status.textContent = 'Network error: ' + e;
+    btn.disabled = false;
+  });
+}
+
+/* ── Delete board ────────────────────────────────────────────────────── */
+function deleteBoard(id, slug, btn) {
+  if (!confirm('Delete /' + slug + '/? This cannot be undone.')) return;
+  btn.disabled = true;
+  fetch('/admin/boards/' + id, {method: 'DELETE'})
+    .then(function(r) {
+      if (r.ok || r.status === 204) {
+        var row = document.getElementById('board-row-' + id);
+        if (row) { row.style.opacity = '.4'; row.cells[2].innerHTML = '<em>deleted</em>'; }
+      } else { alert('Error ' + r.status); btn.disabled = false; }
+    })
+    .catch(function() { alert('Network error'); btn.disabled = false; });
+}
+
+/* ── Deactivate user ─────────────────────────────────────────────────── */
+function deactivateUser(id, username, btn) {
+  if (!confirm('Deactivate ' + username + '?')) return;
+  btn.disabled = true;
+  fetch('/admin/users/' + id + '/deactivate', {method: 'POST'})
+    .then(function(r) {
+      if (r.ok || r.status === 204) {
+        var row = document.getElementById('user-row-' + id);
+        if (row) { row.cells[2].textContent = '✗'; row.cells[3].innerHTML = '<span style="color:#888">Inactive</span>'; }
+      } else { alert('Error ' + r.status); btn.disabled = false; }
+    })
+    .catch(function() { alert('Network error'); btn.disabled = false; });
+}
+
+/* ── Audit log ───────────────────────────────────────────────────────── */
+(function() {
+  fetch('/admin/audit', {headers: {'Accept': 'application/json'}})
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      var el = document.getElementById('audit-body');
+      if (!data || !data.items || !data.items.length) {
+        el.innerHTML = '<p style="color:#888">No audit entries.</p>';
+        return;
+      }
+      var rows = data.items.map(function(e) {
+        return '<tr>' +
+          '<td>' + e.created_at + '</td>' +
+          '<td><code>' + (e.actor_id || 'system') + '</code></td>' +
+          '<td>' + e.action + '</td>' +
+          '<td><code>' + (e.target_id || '—') + '</code></td>' +
+          '</tr>';
+      }).join('');
+      el.innerHTML = '<table class="mod-table"><thead><tr>' +
+        '<th>When</th><th>Actor</th><th>Action</th><th>Target</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+    })
+    .catch(function() {
+      document.getElementById('audit-body').innerHTML = '<p style="color:#888">Could not load.</p>';
+    });
+})();
+</script>
+{% endblock %}

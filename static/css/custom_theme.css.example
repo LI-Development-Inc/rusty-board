@@ -1,0 +1,55 @@
+/* rusty-board — custom_theme.css.example
+ *
+ * Copy to custom_theme.css and reference it in base.html after style.css.
+ * Override any CSS variable or rule from style.css here.
+ *
+ * To add a theme selectable from the [settings] panel, also update:
+ *   static/js/app.js — theme switcher logic
+ *   templates/base.html — settings panel theme choices
+ *
+ * This file is intentionally commented out — uncomment sections you need.
+ */
+
+/*
+:root {
+  -- ── Colours ────────────────────────────────────────────────────────────── --
+  --color-bg:       #f8f1e0;   -- Page background
+  --color-surface:  #fdf6e3;   -- Post / card background
+  --color-border:   #c8b88a;   -- Borders and dividers
+  --color-text:     #2c2c2c;   -- Body text
+  --color-muted:    #7a7a6a;   -- Dates, labels, secondary text
+  --color-link:     #1a5276;   -- Unvisited links
+  --color-link-vis: #78281f;   -- Visited links
+  --color-accent:   #7b241c;   -- Action buttons, highlights
+  --color-op-bg:    #eaf3e7;   -- Opening post background
+  --color-reply-bg: #fdf6e3;   -- Reply post background
+  --color-header:   #c8b88a;   -- Site header / nav bar background
+  --color-quote:    #789922;   -- Greentext / quote colour
+
+  -- ── Typography ─────────────────────────────────────────────────────────── --
+  --font-mono: "Courier New", Courier, monospace;
+  --font-sans: system-ui, -apple-system, sans-serif;
+
+  -- ── Site name in nav ─────────────────────────────────────────────────── --
+  -- .site-name { font-family: ...; color: ...; } --
+}
+*/
+
+/*
+-- Example: green-terminal theme --
+:root {
+  --color-bg:       #0d1117;
+  --color-surface:  #161b22;
+  --color-border:   #30363d;
+  --color-text:     #c9d1d9;
+  --color-muted:    #8b949e;
+  --color-link:     #58a6ff;
+  --color-link-vis: #bc8cff;
+  --color-accent:   #3fb950;
+  --color-op-bg:    #0d2818;
+  --color-reply-bg: #161b22;
+  --color-header:   #010409;
+  --color-quote:    #3fb950;
+}
+body { background-color: var(--color-bg); color: var(--color-text); }
+*/

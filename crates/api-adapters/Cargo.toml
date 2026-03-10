@@ -1,0 +1,44 @@
+[package]
+name    = "api-adapters"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default  = []
+web-axum = ["axum", "tower-http", "tower"]
+web-actix = []  # v1.x+
+
+[dependencies]
+domains          = { path = "../domains" }
+services         = { path = "../services" }
+storage-adapters = { path = "../storage-adapters" }
+thiserror        = { workspace = true }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+chrono           = { workspace = true }
+uuid             = { workspace = true }
+bytes            = { workspace = true }
+mime             = { workspace = true }
+mime_guess       = { workspace = true }
+tracing          = { workspace = true }
+prometheus-client = { workspace = true }
+askama           = { workspace = true }
+sha2             = "0.10"
+hex              = "0.4"
+async-trait      = { workspace = true }
+
+axum       = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+tower      = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio      = { workspace = true }
+tower      = { workspace = true }
+serde_json = { workspace = true }
+axum       = { workspace = true }
+
+# Integration tests need the web-axum feature enabled
+[[test]]
+name              = "board_handlers"
+path              = "tests/board_handlers.rs"
+required-features = ["web-axum"]

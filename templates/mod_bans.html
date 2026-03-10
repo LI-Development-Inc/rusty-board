@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Bans — Moderator Panel{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/mod/dashboard">[dashboard]</a>
+  <a href="/mod/flags">[flags]</a>
+  <a href="/mod/bans">[bans]</a>
+  <span class="nav-sep">|</span>
+{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<h1>Ban List</h1>
+<p><a href="/mod/dashboard">[← Dashboard]</a></p>
+
+{% if bans.is_empty() %}
+<p>No active bans on record.</p>
+{% else %}
+<table class="mod-table">
+  <thead>
+    <tr><th>IP Hash</th><th>Reason</th><th>Issued by</th><th>Expires</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+    {% for ban in bans %}
+    <tr id="ban-row-{{ ban.id }}">
+      <td><code>{{ ban.ip_hash }}</code></td>
+      <td>{{ ban.reason }}</td>
+      <td><code>{{ ban.banned_by }}</code></td>
+      <td>{% if let Some(exp) = ban.expires_at %}{{ exp }}{% else %}Permanent{% endif %}</td>
+      <td>
+        <button class="btn-mod btn-reject" onclick="expireBan('{{ ban.id }}',this)">Expire</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="pagination">
+  {% if page > 1 %}<a href="/mod/bans?page={{ page - 1 }}">[← Prev]</a>{% endif %}
+  Page {{ page }} of {{ total_pages }}
+  {% if page < total_pages %}<a href="/mod/bans?page={{ page + 1 }}">[Next →]</a>{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function expireBan(id, btn) {
+  btn.disabled = true;
+  fetch('/mod/bans/' + id + '/expire', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'}
+  }).then(function(r) {
+    if (r.ok || r.status === 204) {
+      var row = document.getElementById('ban-row-' + id);
+      if (row) { row.cells[3].textContent = 'Expired'; row.style.opacity = '0.4'; }
+    } else {
+      btn.disabled = false;
+      alert('Error: ' + r.status);
+    }
+  }).catch(function(e) { btn.disabled = false; alert('Network error'); });
+}
+</script>
+{% endblock %}

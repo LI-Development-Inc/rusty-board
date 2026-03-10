@@ -1,0 +1,73 @@
+{#- templates/components/post.html
+    Renders a single post with all its attachments, quote links, and action links.
+
+    Expected context variables:
+      post        — Post struct
+      board_slug  — &str
+      thread_id   — ThreadId (for link construction)
+      is_op       — bool (OP posts get the .op class)
+-#}
+<div class="post {% if is_op %}op{% endif %}" id="post-{{ post.id }}">
+  <div class="post-header">
+    <span class="post-name">
+      {% if let Some(name) = post.name.as_ref() %}{{ name }}{% else %}Anonymous{% endif %}
+    </span>
+
+    {% if let Some(trip) = post.tripcode.as_ref() %}
+    <span class="post-tripcode">!{{ trip }}</span>
+    {% endif %}
+
+    <span class="post-date">{{ post.created_at.format("%Y-%m-%d %H:%M:%S") }}</span>
+
+    <a class="post-number" href="#post-{{ post.id }}">No.{{ post.id }}</a>
+
+    <a class="post-reply"
+       href="javascript:void(0)"
+       data-postid="{{ post.id }}"
+       title="Quote this post">[Reply]</a>
+
+    <a class="post-flag"
+       href="/board/{{ board_slug }}/thread/{{ thread_id }}/flag?post={{ post.id }}"
+       title="Report this post">[Report]</a>
+  </div>
+
+  {#- Attachments -#}
+  {% if !post.attachments.is_empty() %}
+  <div class="post-attachments">
+    {% for att in post.attachments.iter() %}
+    <figure class="attachment{% if att.spoiler %} spoiler-attachment{% endif %}">
+      {% if att.thumbnail_key.is_some() %}
+      <a href="/media/{{ att.media_key }}" target="_blank" rel="noopener">
+        <img
+          class="post-thumb{% if att.spoiler %} spoiler{% endif %}"
+          src="/media/{{ att.thumbnail_key.as_ref().unwrap() }}"
+          alt="{{ att.filename }}"
+          width="{{ att.width.unwrap_or(150) }}"
+          height="{{ att.height.unwrap_or(150) }}"
+          loading="lazy"
+        >
+      </a>
+      {% else %}
+      <a href="/media/{{ att.media_key }}" class="file-link">{{ att.filename }}</a>
+      {% endif %}
+      <figcaption class="attachment-meta">
+        {{ att.filename }}
+        ({{ att.file_size.0 }}KB, {{ att.content_type }})
+        {% if att.width.is_some() %}{{ att.width.unwrap() }}x{{ att.height.unwrap() }}{% endif %}
+      </figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {#- Post body with greentext and quote link rendering -#}
+  <div class="post-body">
+    {% for line in post.body.lines() %}
+      {% if line.starts_with('>') %}
+        <span class="greentext">{{ line }}</span><br>
+      {% else %}
+        {{ line }}<br>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>

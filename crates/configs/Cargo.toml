@@ -1,0 +1,20 @@
+[package]
+name    = "configs"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default   = []
+db-postgres = []
+auth-jwt  = []
+redis     = []
+media-s3  = []
+media-local = []
+
+[dependencies]
+thiserror = { workspace = true }
+serde     = { workspace = true }
+config    = { workspace = true }
+dotenvy   = { workspace = true }
+secrecy   = { workspace = true }
+tracing   = { workspace = true }

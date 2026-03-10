@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Login — rusty-board{% endblock %}
+
+{% block content %}
+<div class="login-form">
+  <h1>Staff Login</h1>
+  <div id="error-msg" class="error" style="display:none"></div>
+  <label class="form-label">Username
+    <input type="text" id="username" autocomplete="username" autofocus>
+  </label>
+  <label class="form-label">Password
+    <input type="password" id="password" autocomplete="current-password">
+  </label>
+  <button id="login-btn" type="button" class="btn-reply" style="margin-top:0.5rem">Login</button>
+</div>
+<script>
+(function() {
+  // JWT payloads use base64url (- and _ instead of + and /).
+  // Standard atob() only handles base64. Decode properly:
+  function b64urlDecode(str) {
+    var s = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    try { return JSON.parse(atob(s)); } catch(e) { return {}; }
+  }
+
+  function doLogin() {
+    var username = document.getElementById('username').value.trim();
+    var password = document.getElementById('password').value;
+    var errEl    = document.getElementById('error-msg');
+    var btn      = document.getElementById('login-btn');
+
+    if (!username || !password) {
+      errEl.textContent = 'Username and password are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Logging in...';
+    errEl.style.display = 'none';
+
+    fetch('/auth/login', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({username: username, password: password}),
+    })
+    .then(function(resp) {
+      if (resp.ok) {
+        return resp.json().then(function(data) {
+          var next = new URLSearchParams(window.location.search).get('next');
+          if (next) { window.location.href = next; return; }
+          // Decode JWT payload to determine role for redirect
+          var parts = (data.token || '').split('.');
+          var payload = parts.length >= 2 ? b64urlDecode(parts[1]) : {};
+          var role = payload.role || '';
+          // Route each role to its own dashboard.
+          // /mod/dashboard is a server-side redirect shim kept for compatibility.
+          window.location.href =
+            role === 'admin'           ? '/admin/dashboard' :
+            role === 'janitor'         ? '/janitor/dashboard' :
+            role === 'board_owner'     ? '/board-owner/dashboard' :
+            role === 'board_volunteer' ? '/volunteer/dashboard' :
+            '/mod/dashboard';
+        });
+      } else {
+        return resp.json().catch(function(){ return {}; }).then(function(body) {
+          errEl.textContent = body.message || 'Invalid username or password.';
+          errEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Login';
+        });
+      }
+    })
+    .catch(function() {
+      errEl.textContent = 'Network error — is the server running?';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Login';
+    });
+  }
+
+  document.getElementById('login-btn').addEventListener('click', doLogin);
+  ['username', 'password'].forEach(function(id) {
+    document.getElementById(id).addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') doLogin();
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}New Message — rusty-board{% endblock %}
+
+{% block nav_right %}| <a href="/mod/dashboard">[dashboard]</a> <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<div class="dashboard" style="max-width:600px">
+  <div class="dashboard-header">
+    <h2>✉ New Message</h2>
+    <a href="/staff/messages">[← Inbox]</a>
+  </div>
+
+  <div id="compose-error" class="error" style="display:none;margin-bottom:.75rem"></div>
+
+  <label class="form-label" style="display:block;margin-bottom:.6rem">
+    To (User ID)
+    <input type="text" id="msg-to" value="{{ to_user_id }}"
+           placeholder="Recipient UUID" style="width:100%;box-sizing:border-box;margin-top:.25rem">
+  </label>
+  <label class="form-label" style="display:block;margin-bottom:.6rem">
+    Message
+    <textarea id="msg-body" rows="7" maxlength="4000"
+              placeholder="Write your message (max 4 000 characters)…"
+              style="width:100%;box-sizing:border-box;margin-top:.25rem"></textarea>
+  </label>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <button id="msg-send" class="btn-reply">Send</button>
+    <span id="msg-status" style="font-size:.9em"></span>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('msg-send').addEventListener('click', function() {
+  var to   = document.getElementById('msg-to').value.trim();
+  var body = document.getElementById('msg-body').value.trim();
+  var errEl  = document.getElementById('compose-error');
+  var status = document.getElementById('msg-status');
+  var btn    = this;
+
+  errEl.style.display = 'none';
+  if (!to || !body) {
+    errEl.textContent = 'Recipient and message body are required.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = 'Sending…';
+
+  fetch('/staff/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ to_user_id: to, body: body }),
+  })
+  .then(function(r) {
+    if (r.ok || r.status === 200 || r.status === 201) {
+      status.textContent = '';
+      window.rbToast.ok('✓ Message sent');
+      setTimeout(function() { window.location.href = '/staff/messages'; }, 800);
+      return;
+    }
+    return r.json().catch(function() { return {}; }).then(function(b) {
+      errEl.textContent = b.message || 'Failed to send. Please try again.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      status.textContent = '';
+    });
+  })
+  .catch(function() {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    status.textContent = '';
+  });
+});
+
+// Allow Ctrl+Enter / Cmd+Enter to send
+document.getElementById('msg-body').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    document.getElementById('msg-send').click();
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Flags — Moderator Queue{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/mod/dashboard">[dashboard]</a>
+  <a href="/mod/flags">[flags]</a>
+  <a href="/mod/bans">[bans]</a>
+  <span class="nav-sep">|</span>
+{% endblock %}
+
+{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+{% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
+
+{% block content %}
+<h1>Flag Queue</h1>
+<p><a href="/mod/dashboard">[← Dashboard]</a></p>
+
+{% if flags.is_empty() %}
+<p>No pending flags.</p>
+{% else %}
+<table class="mod-table">
+  <thead>
+    <tr><th>Post ID</th><th>Reason</th><th>Reporter IP</th><th>When</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+    {% for flag in flags %}
+    <tr id="flag-row-{{ flag.id }}">
+      <td><code>{{ flag.post_id }}</code></td>
+      <td>{{ flag.reason }}</td>
+      <td><code>{{ flag.reporter_ip_hash }}</code></td>
+      <td>{{ flag.created_at }}</td>
+      <td>
+        <button class="btn-mod btn-approve" onclick="resolveFlag('{{ flag.id }}','approved',this)">Approve</button>
+        <button class="btn-mod btn-reject"  onclick="resolveFlag('{{ flag.id }}','rejected',this)">Dismiss</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="pagination">
+  {% if page > 1 %}<a href="/mod/flags?page={{ page - 1 }}">[← Prev]</a>{% endif %}
+  Page {{ page }} of {{ total_pages }}
+  {% if page < total_pages %}<a href="/mod/flags?page={{ page + 1 }}">[Next →]</a>{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function resolveFlag(id, resolution, btn) {
+  btn.disabled = true;
+  fetch('/mod/flags/' + id + '/resolve', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({resolution: resolution})
+  }).then(function(r) {
+    if (r.ok || r.status === 204) {
+      var row = document.getElementById('flag-row-' + id);
+      if (row) row.style.opacity = '0.4';
+    } else {
+      btn.disabled = false;
+      alert('Error: ' + r.status);
+    }
+  }).catch(function(e) { btn.disabled = false; alert('Network error'); });
+}
+</script>
+{% endblock %}
