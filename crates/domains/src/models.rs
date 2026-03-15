@@ -524,6 +524,16 @@ pub struct ThreadSummary {
     pub closed: bool,
     /// Last bump time.
     pub bumped_at: DateTime<Utc>,
+    /// OP poster display name, or `None` if anonymous.
+    pub op_name: Option<String>,
+    /// OP tripcode string, or `None`.
+    pub op_tripcode: Option<String>,
+    /// When the OP post was created.
+    pub op_created_at: DateTime<Utc>,
+    /// Board-scoped sequential post number of the OP.
+    pub op_post_number: u64,
+    /// Daily-salted SHA-256 of the OP poster's IP.
+    pub op_ip_hash: IpHash,
 }
 
 /// A post — the atomic unit of content in rusty-board.
@@ -573,6 +583,10 @@ pub struct OverboardPost {
     pub body: String,
     /// Poster display name, or `None` if anonymous.
     pub name: Option<String>,
+    /// Tripcode string (e.g. `"!abc123"`, `"!!xyz789"`), or `None` if no tripcode.
+    pub tripcode: Option<String>,
+    /// Daily-salted SHA-256 of the poster's IP address. Never the raw IP.
+    pub ip_hash: IpHash,
     /// When this post was created.
     pub created_at: DateTime<Utc>,
     /// Board-scoped sequential post number, same as `Post::post_number`.

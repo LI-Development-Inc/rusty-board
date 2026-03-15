@@ -406,6 +406,7 @@ where
         trace::TraceLayer,
     };
     use axum::middleware as axum_middleware;
+    use axum::extract::DefaultBodyLimit;
 
     let board_svc  = Arc::new(board_service);
     let thread_svc = Arc::new(thread_service);
@@ -487,6 +488,10 @@ where
         }))
         // Security response headers on every response
         .layer(axum_middleware::from_fn(security_headers_middleware))
+        // Allow multipart uploads up to 12 MB (board max is 10 MB; the extra
+        // 2 MB covers multipart boundary overhead and multiple small files).
+        // Without this, Axum's default 2 MB limit rejects image uploads silently.
+        .layer(DefaultBodyLimit::max(12 * 1024 * 1024))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .layer(SetRequestIdLayer::new(

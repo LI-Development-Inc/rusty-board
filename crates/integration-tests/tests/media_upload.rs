@@ -54,6 +54,8 @@ impl PostRepository for OkPostRepo {
     ) -> Result<Paginated<Post>, DomainError> {
         Ok(Paginated::new(vec![], 0, p, 15))
     }
+    async fn find_all_by_thread(&self, _: ThreadId) -> Result<Vec<Post>, DomainError> { Ok(vec![]) }
+    async fn find_thread_id_by_post_number(&self, _: BoardId, _: u64) -> Result<Option<ThreadId>, DomainError> { Ok(None) }
 }
 
 struct OkThreadRepo;

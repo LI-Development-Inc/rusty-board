@@ -64,6 +64,16 @@
             <option value="become_janitor">Become a site janitor</option>
           </select>
         </label>
+        <!-- Shown for board_create only -->
+        <div id="req-create-row" style="display:block">
+          <label class="form-label">Preferred slug
+            <input type="text" id="req-preferred-slug" placeholder="e.g. tech (3–16 lowercase letters/digits)">
+          </label>
+          <label class="form-label">Preferred title
+            <input type="text" id="req-preferred-title" placeholder="e.g. Technology">
+          </label>
+        </div>
+        <!-- Shown for become_volunteer only -->
         <div id="req-target-row" style="display:none">
           <label class="form-label">Board slug
             <input type="text" id="req-target" placeholder="e.g. tech">
@@ -91,12 +101,17 @@
 {% block scripts %}
 <script>
 (function() {
-  var typeEl   = document.getElementById('req-type');
-  var targetRow = document.getElementById('req-target-row');
+  var typeEl      = document.getElementById('req-type');
+  var createRow   = document.getElementById('req-create-row');
+  var targetRow   = document.getElementById('req-target-row');
 
-  typeEl.addEventListener('change', function() {
-    targetRow.style.display = typeEl.value === 'become_volunteer' ? 'block' : 'none';
-  });
+  function syncFields() {
+    var v = typeEl.value;
+    createRow.style.display = (v === 'board_create')    ? 'block' : 'none';
+    targetRow.style.display = (v === 'become_volunteer') ? 'block' : 'none';
+  }
+  typeEl.addEventListener('change', syncFields);
+  syncFields();
 
   document.getElementById('req-submit').addEventListener('click', function() {
     var type  = typeEl.value;
@@ -105,6 +120,19 @@
     errEl.style.display = 'none';
 
     var body = { request_type: type, notes: notes };
+
+    if (type === 'board_create') {
+      var slug  = document.getElementById('req-preferred-slug').value.trim();
+      var title = document.getElementById('req-preferred-title').value.trim();
+      if (!slug || !title) {
+        errEl.textContent = 'slug and title are required for a board_create request';
+        errEl.style.display = 'block';
+        return;
+      }
+      body.preferred_slug  = slug;
+      body.preferred_title = title;
+    }
+
     if (type === 'become_volunteer') {
       var slug = document.getElementById('req-target').value.trim();
       if (!slug) {
@@ -129,7 +157,7 @@
         window.location.reload();
       } else {
         return r.json().catch(function(){ return {}; }).then(function(b) {
-          errEl.textContent = b.message || 'Failed to submit request.';
+          errEl.textContent = b.message || b.error || 'Failed to submit request.';
           errEl.style.display = 'block';
           btn.disabled = false;
           btn.textContent = '[Submit Request]';

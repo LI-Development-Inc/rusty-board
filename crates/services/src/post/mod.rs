@@ -503,6 +503,19 @@ where
         let paginated = self.post_repo.find_overboard(page).await?;
         Ok(paginated)
     }
+
+    /// Bulk-fetch attachments for a slice of post IDs, grouped by `PostId`.
+    ///
+    /// Delegates to `PostRepository::find_attachments_by_post_ids`. Used by the
+    /// overboard handler (and any future handler) that needs attachment data
+    /// without going through `ThreadService`.
+    pub async fn find_post_attachments(
+        &self,
+        post_ids: &[domains::models::PostId],
+    ) -> Result<std::collections::HashMap<domains::models::PostId, Vec<domains::models::Attachment>>, PostError> {
+        self.post_repo.find_attachments_by_post_ids(post_ids).await
+            .map_err(PostError::Internal)
+    }
 }
 
 #[cfg(test)]

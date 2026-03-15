@@ -27,16 +27,39 @@
 <hr>
 
 <div class="posts overboard-posts">
-  {% for post in recent_posts %}
-  <div class="post reply-post" id="post-{{ post.post_number }}">
+  {% for pd in recent_posts %}
+  <div class="post reply-post" id="post-{{ pd.post.post_number }}">
     <div class="post-header">
-      <a class="board-tag" href="/board/{{ post.board_slug }}">/{{ post.board_slug }}/</a>
-      <span class="post-name">{% if post.name.is_some() %}{{ post.name.as_ref().unwrap() }}{% else %}Anonymous{% endif %}</span>
-      <span class="post-date">{{ post.created_at }}</span>
-      <a class="post-number" href="/board/{{ post.board_slug }}/thread/{{ post.thread_id }}#post-{{ post.post_number }}">No.{{ post.post_number }}</a>
-      <a class="thread-link" href="/board/{{ post.board_slug }}/thread/{{ post.thread_id }}">[Thread]</a>
+      <a class="board-tag" href="/board/{{ pd.post.board_slug }}">/{{ pd.post.board_slug }}/</a>
+      <span class="post-name">{% if pd.post.name.is_some() %}{{ pd.post.name.as_ref().unwrap() }}{% else %}Anonymous{% endif %}</span>
+      {% if pd.post.tripcode.is_some() %}
+      <span class="post-tripcode" data-level="{{ pd.tripcode_level.unwrap() }}">{{ pd.post.tripcode.as_ref().unwrap() }}</span>
+      {% endif %}
+      <time class="post-date" data-ts="{{ pd.post.created_at.timestamp() }}">{{ pd.post.created_at }}</time>
+      <span class="poster-id" style="background:#{{ pd.poster_id }};color:#fff;border-color:#{{ pd.poster_id }}" title="Poster ID">ID: {{ pd.poster_id }}</span>
+      <a class="post-number" href="/board/{{ pd.post.board_slug }}/thread/{{ pd.post.thread_id }}#post-{{ pd.post.post_number }}">No.{{ pd.post.post_number }}</a>
+      <a class="thread-link" href="/board/{{ pd.post.board_slug }}/thread/{{ pd.post.thread_id }}">[Open Thread →]</a>
     </div>
-    <div class="post-body">{{ post.body }}</div>
+    {% if !pd.attachments.is_empty() %}
+    <div class="post-images">
+      {% for att in pd.attachments %}
+      <div class="post-image">
+        {% if att.thumbnail_key.is_some() %}
+        <a href="/media/{{ att.media_key.0 }}" target="_blank" class="image-link">
+          <img src="/media/{{ att.thumbnail_key.as_ref().unwrap().0 }}"
+               alt="{{ att.filename }}"
+               class="post-thumb"
+               title="{{ att.filename }} ({{ att.size_kb }}KB)">
+        </a>
+        {% else %}
+        <a href="/media/{{ att.media_key.0 }}" target="_blank">[{{ att.filename }}]</a>
+        {% endif %}
+        <div class="image-info">{{ att.filename }} ({{ att.size_kb }}KB)</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="post-body">{{ pd.post.body }}</div>
   </div>
   {% endfor %}
 </div>

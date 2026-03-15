@@ -128,6 +128,8 @@ impl domains::ports::PostRepository for NopPostRepo {
     async fn find_attachments_by_post_ids(&self, _: &[PostId]) -> Result<std::collections::HashMap<PostId, Vec<domains::models::Attachment>>, domains::errors::DomainError> { Ok(std::collections::HashMap::new()) }
     async fn find_overboard(&self, p: Page) -> Result<Paginated<domains::models::OverboardPost>, domains::errors::DomainError> { Ok(Paginated::new(vec![], 0, p, 15)) }
     async fn search_fulltext(&self, _: BoardId, _: &str, p: Page) -> Result<Paginated<Post>, domains::errors::DomainError> { Ok(Paginated::new(vec![], 0, p, 15)) }
+    async fn find_all_by_thread(&self, _: ThreadId) -> Result<Vec<Post>, domains::errors::DomainError> { Ok(vec![]) }
+    async fn find_thread_id_by_post_number(&self, _: BoardId, _: u64) -> Result<Option<domains::models::ThreadId>, domains::errors::DomainError> { Ok(None) }
 }
 
 // ─── Helper: inject admin CurrentUser into a request ─────────────────────────

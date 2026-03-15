@@ -19,5 +19,8 @@ pub fn thread_routes<TR: ThreadRepo>(thread_service: Arc<TR>) -> Router {
         .route("/board/{slug}",          get(thread_handlers::show_board_html::<TR>))
         .route("/board/{slug}/catalog",  get(thread_handlers::show_catalog_html::<TR>))
         .route("/board/{slug}/thread/{id}", get(thread_handlers::show_thread_html::<TR>))
+        // Cross-board post number resolver: >>>/{slug}/{N} links generate /board/{slug}/post/{N}
+        // which redirects to the correct /board/{slug}/thread/{uuid}#post-{N}
+        .route("/board/{slug}/post/{post_number}", get(thread_handlers::redirect_to_post::<TR>))
         .with_state(thread_service)
 }

@@ -61,7 +61,7 @@ oxipng              = "10.1"
 # ── Media — feature-gated ────────────────────────────────────────────────────
 ffmpeg-next         = "8.0"
 pdfium-render       = "0.8"
-aws-sdk-s3          = { version = "1.124"}
+aws-sdk-s3          = { version = "1.124" }
 aws-config          = { version = "1.5" }
 rustls              = { version = "0.23", default-features = false, features = ["ring"] }
 

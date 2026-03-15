@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use domains::errors::DomainError;
 use domains::models::{
-    BoardId, MediaKey, Page, Paginated, PostId, Thread, ThreadId, ThreadSummary,
+    BoardId, IpHash, MediaKey, Page, Paginated, PostId, Thread, ThreadId, ThreadSummary,
 };
 use domains::ports::ThreadRepository;
 use sqlx::PgPool;
@@ -57,14 +57,19 @@ fn thread_from_row(r: ThreadRow) -> Thread {
 
 #[derive(sqlx::FromRow)]
 struct ThreadSummaryRow {
-    thread_id:     Uuid,
-    board_id:      Uuid,
-    reply_count:   i32,
-    sticky:        bool,
-    closed:        bool,
-    bumped_at:     DateTime<Utc>,
-    op_body:       Option<String>,
-    thumbnail_key: Option<String>,
+    thread_id:      Uuid,
+    board_id:       Uuid,
+    reply_count:    i32,
+    sticky:         bool,
+    closed:         bool,
+    bumped_at:      DateTime<Utc>,
+    op_body:        Option<String>,
+    thumbnail_key:  Option<String>,
+    op_name:        Option<String>,
+    op_tripcode:    Option<String>,
+    op_created_at:  Option<DateTime<Utc>>,
+    op_post_number: Option<i64>,
+    op_ip_hash:     Option<String>,
 }
 
 #[async_trait]
@@ -117,7 +122,9 @@ impl ThreadRepository for PgThreadRepository {
         // Left join with op post and first attachment thumbnail
         let rows = sqlx::query_as::<_, ThreadSummaryRow>(
             "SELECT t.id AS thread_id, t.board_id, t.reply_count, t.sticky, t.closed, t.bumped_at,
-                    p.body AS op_body, a.thumbnail_key
+                    p.body AS op_body, p.name AS op_name, p.tripcode AS op_tripcode,
+                    p.created_at AS op_created_at, p.post_number AS op_post_number,
+                    p.ip_hash AS op_ip_hash, a.thumbnail_key
              FROM threads t
              LEFT JOIN posts p ON p.id = t.op_post_id
              LEFT JOIN LATERAL (
@@ -133,15 +140,21 @@ impl ThreadRepository for PgThreadRepository {
         .await
         .map_err(|e| DomainError::internal(e.to_string()))?;
 
+        let epoch = DateTime::from_timestamp(0, 0).unwrap_or_default();
         Ok(rows.into_iter().map(|r| ThreadSummary {
-            thread_id:     ThreadId(r.thread_id),
-            board_id:      BoardId(r.board_id),
-            op_body:       r.op_body.unwrap_or_default(),
-            thumbnail_key: r.thumbnail_key.map(MediaKey::new),
-            reply_count:   r.reply_count as u32,
-            sticky:        r.sticky,
-            closed:        r.closed,
-            bumped_at:     r.bumped_at,
+            thread_id:      ThreadId(r.thread_id),
+            board_id:       BoardId(r.board_id),
+            op_body:        r.op_body.unwrap_or_default(),
+            thumbnail_key:  r.thumbnail_key.map(MediaKey::new),
+            reply_count:    r.reply_count as u32,
+            sticky:         r.sticky,
+            closed:         r.closed,
+            bumped_at:      r.bumped_at,
+            op_name:        r.op_name,
+            op_tripcode:    r.op_tripcode,
+            op_created_at:  r.op_created_at.unwrap_or(epoch),
+            op_post_number: r.op_post_number.unwrap_or(0) as u64,
+            op_ip_hash:     IpHash(r.op_ip_hash.unwrap_or_default()),
         }).collect())
     }
 

@@ -46,6 +46,21 @@ pub trait ThreadRepo: Send + Sync + 'static {
     /// Returns `ThreadError::NotFound` if the thread does not exist.
     async fn list_posts(&self, thread_id: ThreadId, page: Page) -> Result<Paginated<Post>, ThreadError>;
 
+    /// All posts in a thread, ordered by `post_number ASC`, up to the bump limit (500).
+    ///
+    /// Used by the thread HTML view, which shows all posts without pagination.
+    async fn list_all_posts(&self, thread_id: ThreadId) -> Result<Vec<Post>, ThreadError>;
+
+    /// Resolve a board-scoped post number to the `ThreadId` that contains it.
+    ///
+    /// Used by `GET /board/{slug}/post/{N}` redirect handler for cross-board links.
+    /// Returns `None` when no post with that number exists on the board.
+    async fn find_thread_id_by_post_number(
+        &self,
+        board_id: BoardId,
+        post_number: u64,
+    ) -> Result<Option<ThreadId>, ThreadError>;
+
     /// Bulk-fetch attachments for a slice of post IDs, grouped by post_id.
     ///
     /// Used by the thread view to load images without N+1 queries.
@@ -215,6 +230,18 @@ impl<TR: ThreadRepository, PR: PostRepository> ThreadRepo for ThreadService<TR, 
     }
     async fn list_posts(&self, thread_id: ThreadId, page: Page) -> Result<Paginated<Post>, ThreadError> {
         self.post_repo.find_by_thread(thread_id, page).await
+            .map_err(ThreadError::Internal)
+    }
+    async fn list_all_posts(&self, thread_id: ThreadId) -> Result<Vec<Post>, ThreadError> {
+        self.post_repo.find_all_by_thread(thread_id).await
+            .map_err(ThreadError::Internal)
+    }
+    async fn find_thread_id_by_post_number(
+        &self,
+        board_id: BoardId,
+        post_number: u64,
+    ) -> Result<Option<ThreadId>, ThreadError> {
+        self.post_repo.find_thread_id_by_post_number(board_id, post_number).await
             .map_err(ThreadError::Internal)
     }
     async fn find_post_attachments(

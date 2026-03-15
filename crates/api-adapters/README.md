@@ -74,6 +74,7 @@ src/
 | `GET` | `/board/:slug` | `list_threads_html` | paginated thread index |
 | `GET` | `/board/:slug/catalog` | `catalog_html` | catalog grid |
 | `GET` | `/board/:slug/thread/:id` | `show_thread_html` | thread + posts; mod toolbar if staff |
+| `GET` | `/board/:slug/post/:number` | `redirect_to_post` | resolves board-scoped post number → 303 to thread anchor |
 | `GET` | `/overboard` | `overboard_html` | recent posts all boards |
 | `POST` | `/board/:slug/post` | `create_post` | anonymous post creation |
 | `POST` | `/board/:slug/thread/:id/flag` | `create_flag` | report a post |
@@ -120,9 +121,10 @@ Askama templates — type-checked at compile time. Template structs live in `tem
 | Template | Struct | Notes |
 |----------|--------|-------|
 | `base.html` | (layout) | Auth-aware nav; `rbToast` global; fetches `/auth/me` |
-| `thread.html` | `ThreadTemplate` | Mod toolbar when `viewer_role.is_some()`; (You) tracking; single-pass quote linkification |
+| `thread.html` | `ThreadTemplate` | Mod toolbar when `viewer_role.is_some()`; (You) tracking; single-pass quote linkification; all posts shown without pagination |
 | `board.html` | `BoardTemplate` | Thread index |
 | `catalog.html` | `CatalogTemplate` | Grid view |
+| `overboard.html` | `OverboardTemplate<OverboardPostDisplay>` | Recent posts + inline images across all boards |
 | `staff_inbox.html` | `StaffInboxTemplate` | Staff messages |
 | `staff_compose.html` | `StaffComposeTemplate` | Message compose |
 | `*_dashboard.html` | `*DashboardTemplate` | Per-role dashboards |
@@ -130,7 +132,10 @@ Askama templates — type-checked at compile time. Template structs live in `tem
 ### Thread page JS features
 
 - **Quote links** — single combined regex (fixes `>>>/slug/N` bug where pass 2 corrupted pass 1 anchors)
-- **(You) tracking** — posts by the viewer marked with green `(You)` via `localStorage`
+- **(You) tracking** — `POST /board/:slug/post` returns `201 {post_number}` on `Accept: application/json`; number stored in `localStorage` and shown as green `(You)` badge
+- **Click-to-quote** — clicking the `No.N` anchor only (not the whole post) inserts `>>N` into the reply form
+- **Timestamp format** — user-selectable: Relative / MM/DD/YY HH:MM:SS / ISO 8601; `data-ts` epoch attribute on every `<time>` element; preference in `localStorage rb:time-fmt`; relative mode refreshes every 60 s
+- **Auto-update** — optional checkbox; polls thread for new posts; exponential back-off 10 s → 5 min on no new activity; preference in `sessionStorage rb:auto-update`
 - **Mod toolbar** — `[D] [D*] [B] [B&D] [B&D*] [S+/-] [C+/-]` with confirm dialogs and ban modal
 - **IP hash display** — shown to staff only, via `viewer_role` server-side gate
 - **Rate limit / capcode errors** — shown as toast popups, not JSON

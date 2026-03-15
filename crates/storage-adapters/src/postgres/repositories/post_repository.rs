@@ -278,12 +278,18 @@ impl PostRepository for PgPostRepository {
             board_slug:  String,
             body:        String,
             name:        Option<String>,
+            tripcode:    Option<String>,
+            ip_hash:     String,
             created_at:  chrono::DateTime<chrono::Utc>,
             post_number: i64,
         }
 
         let rows = sqlx::query_as::<_, OverboardRow>(
-            "SELECT p.id, p.thread_id, b.slug AS board_slug, p.body, p.name, p.created_at, p.post_number              FROM posts p              JOIN threads t ON t.id = p.thread_id              JOIN boards  b ON b.id = t.board_id              ORDER BY p.created_at DESC LIMIT $1 OFFSET $2"
+            "SELECT p.id, p.thread_id, b.slug AS board_slug, p.body, p.name, p.tripcode, p.ip_hash, p.created_at, p.post_number \
+             FROM posts p \
+             JOIN threads t ON t.id = p.thread_id \
+             JOIN boards  b ON b.id = t.board_id \
+             ORDER BY p.created_at DESC LIMIT $1 OFFSET $2"
         )
         .bind(limit)
         .bind(offset)
@@ -302,6 +308,8 @@ impl PostRepository for PgPostRepository {
             board_slug:  r.board_slug,
             body:        r.body,
             name:        r.name,
+            tripcode:    r.tripcode,
+            ip_hash:     IpHash(r.ip_hash),
             created_at:  r.created_at,
             post_number: r.post_number as u64,
         }).collect();
@@ -358,5 +366,47 @@ impl PostRepository for PgPostRepository {
 
         let items = rows.into_iter().map(post_from_row).collect();
         Ok(Paginated::new(items, total as u64, page, page_size))
+    }
+
+    async fn find_all_by_thread(&self, thread_id: ThreadId) -> Result<Vec<Post>, DomainError> {
+        // Loads up to 500 posts — the maximum bump limit. Thread view shows all posts
+        // without pagination, so we cap at bump_limit max rather than paginating.
+        let rows = sqlx::query_as::<_, PostRow>(
+            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number
+             FROM   posts
+             WHERE  thread_id = $1
+             ORDER  BY post_number ASC
+             LIMIT  500",
+        )
+        .bind(thread_id.0)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| DomainError::internal(e.to_string()))?;
+
+        Ok(rows.into_iter().map(post_from_row).collect())
+    }
+
+    async fn find_thread_id_by_post_number(
+        &self,
+        board_id: BoardId,
+        post_number: u64,
+    ) -> Result<Option<ThreadId>, DomainError> {
+        // Looks up the thread containing the given board-scoped post number.
+        // Used by the cross-board >>>/{slug}/{N} redirect handler.
+        let row: Option<(uuid::Uuid,)> = sqlx::query_as(
+            "SELECT p.thread_id
+             FROM   posts p
+             JOIN   threads t ON t.id = p.thread_id
+             WHERE  t.board_id = $1
+               AND  p.post_number = $2
+             LIMIT  1",
+        )
+        .bind(board_id.0)
+        .bind(post_number as i64)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| DomainError::internal(e.to_string()))?;
+
+        Ok(row.map(|(id,)| ThreadId(id)))
     }
 }

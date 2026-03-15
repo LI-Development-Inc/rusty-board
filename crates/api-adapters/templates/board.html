@@ -41,21 +41,33 @@
 
 <hr>
 
-{% for thread in threads %}
-<div class="thread" id="thread-{{ thread.thread_id }}">
+{% for td in threads %}
+<div class="thread" id="thread-{{ td.thread.thread_id }}">
   <div class="thread-op">
-    <div class="post-header">
-      <span class="post-name">Anonymous</span>
-      {% if thread.sticky %}<span class="tag sticky">[STICKY]</span>{% endif %}
-      {% if thread.closed %}<span class="tag closed">[CLOSED]</span>{% endif %}
-      <a class="post-link" href="/board/{{ board.slug }}/thread/{{ thread.thread_id }}">No.{{ thread.thread_id }}</a>
+    {% if let Some(tk) = td.thread.thumbnail_key.as_ref() %}
+    <div class="op-thumb-wrap">
+      <a href="/board/{{ board.slug }}/thread/{{ td.thread.thread_id }}">
+        <img src="/media/{{ tk.0 }}" class="op-thumb" alt="OP image">
+      </a>
     </div>
-    <div class="post-body op-preview">{{ thread.op_body }}</div>
+    {% endif %}
+    <div class="post-header">
+      <span class="post-name">{% if td.thread.op_name.is_some() %}{{ td.thread.op_name.as_ref().unwrap() }}{% else %}Anonymous{% endif %}</span>
+      {% if td.thread.op_tripcode.is_some() %}
+      <span class="post-tripcode" data-level="{{ td.tripcode_level.unwrap() }}">{{ td.thread.op_tripcode.as_ref().unwrap() }}</span>
+      {% endif %}
+      {% if td.thread.sticky %}<span class="tag sticky">[STICKY]</span>{% endif %}
+      {% if td.thread.closed %}<span class="tag closed">[CLOSED]</span>{% endif %}
+      <time class="post-date" data-ts="{{ td.thread.op_created_at.timestamp() }}">{{ td.thread.op_created_at }}</time>
+      <span class="poster-id" style="background:#{{ td.poster_id }};color:#fff;border-color:#{{ td.poster_id }}" title="Poster ID">ID: {{ td.poster_id }}</span>
+      <a class="post-number" href="/board/{{ board.slug }}/thread/{{ td.thread.thread_id }}">No.{{ td.thread.op_post_number }}</a>
+    </div>
+    <div class="post-body op-preview">{{ td.thread.op_body }}</div>
     <div class="thread-footer">
       <span class="reply-count">
-        {{ thread.reply_count }} repl{% if thread.reply_count == 1 %}y{% else %}ies{% endif %}
+        {{ td.thread.reply_count }} repl{% if td.thread.reply_count == 1 %}y{% else %}ies{% endif %}
       </span>
-      — <a href="/board/{{ board.slug }}/thread/{{ thread.thread_id }}">[Open Thread →]</a>
+      — <a href="/board/{{ board.slug }}/thread/{{ td.thread.thread_id }}">[Open Thread →]</a>
     </div>
   </div>
 </div>

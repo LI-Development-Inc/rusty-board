@@ -85,12 +85,11 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 |----------|-------------|--------|
 | `storage-adapters/src/media/videos.rs` | `VideoMediaProcessor` — ffmpeg-next keyframe extraction | v1.0 patch |
 | `storage-adapters/src/media/documents.rs` | `DocumentMediaProcessor` — pdfium-render first page | v1.0 patch |
-| `api-adapters/.../board_owner_handlers.rs` | Staff list not yet loaded via `UserRepository` | v1.1.1 |
-| `api-adapters/.../user_handlers.rs` | `joined_at` not yet surfaced from `User` model | v1.1.1 |
 | `domains/src/models.rs` | `CaptchaVerifier` port not yet wired (schema field exists) | v1.1.1 |
 | `domains/src/models.rs` | `SearchIndex` port not yet wired (schema field exists) | v1.2 |
 | `domains/src/models.rs` | Archive adapter not yet wired (schema field exists) | v1.2 |
 | `domains/src/models.rs` | `FederationSync` port not yet wired (schema field exists) | v2.0 |
+| `services/src/common/tripcode.rs` | Super tripcode `###` returns `!!!STUB` — ed25519 two-step flow | v1.2 |
 
 ---
 
@@ -139,18 +138,30 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 - `GET /auth/register` renders registration page
 - `testuser / user123` account seeded as the canonical `user` role example
 
-### v1.1 Open Items
+**UX & Thread View Fixes** (delivered alongside v1.1)
+- Cross-board `>>>/{slug}/{N}` links now resolve correctly via `GET /board/{slug}/post/{N}` server-side redirect (`PostRepository::find_thread_id_by_post_number`)
+- Thread view shows all posts up to bump limit (500) without pagination — `PostRepository::find_all_by_thread`
+- (You) post tracking: reply form sends `Accept: application/json`; server returns `{post_number}` in 201 JSON; post number stored in `localStorage` and displayed as green `(You)` badge on your posts and `>>{N} (You)` on quote links
+- Click-to-quote triggers only on `No.{N}` anchor, not the whole post
+- Post timestamps: user-selectable format (relative / MM/DD/YY HH:MM:SS / ISO 8601); preference persisted in `localStorage`; relative timestamps refresh every 60 s
+- Auto-update toggle with exponential back-off (10 s → … → 5 min cap); preference persisted in `sessionStorage`
+- Images rendered in overboard view (bulk attachment fetch via `PostRepository::find_attachments_by_post_ids`)
+- User dashboard displays real `joined_at` date from `User::created_at`
+- Board-owner dashboard lists actual volunteers for owned boards
+
+### v1.1 Open Items (→ v1.1.1)
 
 | Item | Description | Target |
 |------|-------------|--------|
 | Super tripcode `###` | Stub returns `!!!STUB`; full ed25519 needs `TripkeyRepository` port and two-step post flow | v1.2 |
 | `CaptchaVerifier` wiring | Port not yet connected in `PostService` even though `captcha_required` schema field exists | v1.1.1 |
-| Staff message badge | `unread_count` not yet in `DashboardTemplate` nav | v1.1.1 |
-| CSP / inline scripts | Templates contain inline JS; extract to `/static/js/` + nonce loading for strict CSP | v1.1.1 |
+| Staff message nav badge | `unread_count` is computed but not yet surfaced in the nav bar | v1.1.1 |
+| CSP / inline scripts | Templates contain inline `<script>` blocks; extract to `/static/js/` + nonce CSP | v1.1.1 |
 | `auth-tripcode` gate | `parse_name_field` is always-on; add `#[cfg(feature = "auth-tripcode")]` if optional gating desired | v1.1.1 |
-| Thread cycle mode | `[C]` button in mod toolbar is wired but `cycle` DB column and oldest-post pruning logic are not yet implemented | v1.2 |
-| Thread pin-in-cycle | `[Pin]` button for cycle threads — pins a post so it is never pruned; requires `pinned` column on `posts` | v1.2 |
-| (You) post-number capture | Reply success response should return `X-Post-Number` header so the number is stored immediately rather than after reload | v1.1.1 |
+| Thread cycle mode | `[C]` mod button is wired but `cycle` DB column and oldest-post pruning logic are not implemented | v1.2 |
+| Thread pin-in-cycle | `[Pin]` for cycle threads — requires `pinned` column on `posts` + prune exclusion | v1.2 |
+| `X-Request-Id` middleware | `request_id.rs` module declared; `tower-http::SetRequestId` implementation pending | v1.1.1 |
+| Login brute-force protection | No account lockout after N failed attempts; rate limit on `/auth/login` via `RateLimiter` port | v1.1.1 |
 
 ---
 
@@ -229,7 +240,7 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 |------|------|------|------|------|------|
 | `BoardRepository` | Postgres ✅ | — | **SQLite** | — | **SurrealDB** |
 | `ThreadRepository` | Postgres ✅ | — | **SQLite** | — | — |
-| `PostRepository` | Postgres ✅ | — | **SQLite** | — | — |
+| `PostRepository` | Postgres ✅ | `find_all_by_thread`, `find_thread_id_by_post_number`, `search_fulltext` ✅ | **SQLite** | — | — |
 | `BanRepository` | Postgres ✅ | — | **SQLite** | — | — |
 | `FlagRepository` | Postgres ✅ | — | **SQLite** | — | — |
 | `AuditRepository` | Postgres ✅ | ✅ find_all/find_by_board | **SQLite** | — | — |

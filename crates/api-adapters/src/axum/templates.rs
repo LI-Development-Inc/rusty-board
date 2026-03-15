@@ -33,6 +33,11 @@ pub struct PostDisplay {
     /// CSS class suffix for the capcode, e.g. `"admin"` or `"board-owner"`.
     /// `None` when `capcode_role` is `None`.
     pub capcode_css: Option<String>,
+    /// Tripcode security level for CSS styling: `"insecure"`, `"secure"`, or `"super"`.
+    /// `None` when the post has no tripcode (or has a capcode instead).
+    pub tripcode_level: Option<&'static str>,
+    /// First 10 characters of the IP hash for truncated mod display.
+    pub ip_hash_short: String,
 }
 
 /// Render a template to an HTML response, returning 500 on render failure.
@@ -54,19 +59,22 @@ pub struct BaseContext {
 }
 
 /// Template for the board view (`board.html`) — list of threads.
+/// A thread summary enriched with display-time computed fields for the board index.
+#[derive(Debug, Clone)]
+pub struct BoardThreadDisplay {
+    pub thread:         domains::models::ThreadSummary,
+    pub poster_id:      String,
+    pub tripcode_level: Option<&'static str>,
+}
+
 #[derive(Template)]
 #[template(path = "board.html")]
 pub struct BoardTemplate {
-    /// The board whose threads are being displayed.
-    pub board:         Board,
-    /// Runtime behavioural configuration for the board (used to show posting rules).
-    pub config:        BoardConfig,
-    /// Thread summaries (with OP body and reply count) ordered by `bumped_at` descending.
-    pub threads:       Vec<ThreadSummary>,
-    /// Total number of pages for this board's thread list.
-    pub total_pages:   u32,
-    /// The page number currently being rendered (1-indexed).
-    pub current_page:  u32,
+    pub board:        Board,
+    pub config:       BoardConfig,
+    pub threads:      Vec<BoardThreadDisplay>,
+    pub total_pages:  u32,
+    pub current_page: u32,
 }
 
 impl IntoResponse for BoardTemplate {
@@ -94,24 +102,36 @@ impl IntoResponse for CatalogTemplate {
 #[template(path = "thread.html")]
 pub struct ThreadTemplate {
     /// The board this thread belongs to.
-    pub board:        Board,
+    pub board:       Board,
     /// The thread being rendered.
-    pub thread:       Thread,
-    /// Posts on the current page with per-thread poster ID badges.
-    pub posts:        Vec<PostDisplay>,
-    /// Total number of pages in this thread.
-    pub total_pages:  u32,
-    /// The page number currently being rendered (1-indexed).
-    pub current_page: u32,
+    pub thread:      Thread,
+    /// All posts in the thread with per-thread poster ID badges and attachments.
+    /// Threads show every post up to the bump limit — no pagination.
+    pub posts:       Vec<PostDisplay>,
     /// Whether the thread is closed to new replies.
-    pub is_closed:    bool,
+    pub is_closed:   bool,
     /// Role string for the viewing staff member, e.g. `"janitor"`.
     /// `None` for anonymous visitors and registered users without moderation rights.
-    pub viewer_role:  Option<String>,
+    pub viewer_role: Option<String>,
 }
 
 impl IntoResponse for ThreadTemplate {
     fn into_response(self) -> Response { render_template(self) }
+}
+
+/// An overboard post bundled with its media attachments for template rendering.
+#[derive(Debug, Clone)]
+pub struct OverboardPostDisplay {
+    /// The post data with board context.
+    pub post: OverboardPost,
+    /// Media attachments for this post (may be empty).
+    pub attachments: Vec<domains::models::Attachment>,
+    /// Short 8-char hex poster ID (SHA-256 of ip_hash + thread_id).
+    pub poster_id: String,
+    /// Tripcode security level: `"insecure"`, `"secure"`, `"super"`, or `None`.
+    pub tripcode_level: Option<&'static str>,
+    /// First 10 chars of ip_hash for truncated mod display.
+    pub ip_hash_short: String,
 }
 
 /// Template for the overboard view (`overboard.html`) — recent posts across all boards.
@@ -120,8 +140,8 @@ impl IntoResponse for ThreadTemplate {
 pub struct OverboardTemplate {
     /// All boards, used to render the board list sidebar.
     pub boards:       Vec<Board>,
-    /// Recent posts across all boards on the current page.
-    pub recent_posts: Vec<OverboardPost>,
+    /// Recent posts across all boards on the current page, with attachments.
+    pub recent_posts: Vec<OverboardPostDisplay>,
     /// The page number currently being rendered (1-indexed).
     pub current_page: u32,
     /// Total number of pages in the recent-posts feed.

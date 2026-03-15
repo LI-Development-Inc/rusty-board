@@ -77,6 +77,14 @@ Full pipeline in order:
 
 > **TODO v1.2**: step 10 will also trigger oldest-post pruning when `thread.cycle == true` and past bump limit. See stub comment in `post/mod.rs`.
 
+### `PostService` read methods
+
+| Method | Description |
+|--------|-------------|
+| `list_posts(thread_id, page)` | Paginated posts in a thread |
+| `list_overboard(page)` | Recent posts across all boards (overboard view) |
+| `find_post_attachments(post_ids)` | Bulk-fetch attachment metadata for a set of post IDs |
+
 ### `ModerationService`
 
 | Method | Route | Action |
@@ -95,6 +103,7 @@ Full pipeline in order:
 - `register(username, password)` → creates `Role::User` account
 - `create_user(username, password, role)` → admin-only account creation
 - `login(username, password)` → returns `Token` on success
+- `get_user(user_id)` → load a single `User` record by ID (used by dashboards)
 - Password hashing delegated to `AuthProvider` (argon2id via `JwtAuthProvider` or `CookieAuthProvider`)
 
 ### `common/tripcode.rs`

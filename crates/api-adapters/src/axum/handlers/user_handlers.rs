@@ -66,9 +66,19 @@ where
         .await
         .map_err(ApiError::from)?;
 
+    // Load the full User record to get the real created_at timestamp.
+    let user = state.user_svc
+        .get_user(current.id)
+        .await
+        .map_err(ApiError::from)?;
+
+    let joined_at = user.created_at
+        .format("%Y-%m-%d")
+        .to_string();
+
     Ok(UserDashboardTemplate {
         username:         current.username.clone(),
-        joined_at:        "—".to_owned(), // TODO v1.1: store created_at on User
+        joined_at,
         pending_requests: requests,
     }
     .into_response())

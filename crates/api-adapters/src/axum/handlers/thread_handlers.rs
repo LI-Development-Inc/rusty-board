@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use crate::axum::{
     middleware::board_config::ExtractedBoardConfig,
-    templates::{BoardTemplate, CatalogTemplate, PostDisplay, ThreadTemplate},
+    templates::{BoardTemplate, BoardThreadDisplay, CatalogTemplate, PostDisplay, ThreadTemplate},
 };
 use sha2::{Digest, Sha256};
 use crate::common::{
@@ -25,30 +25,42 @@ use domains::models::{Page, Thread, ThreadId, ThreadSummary};
 
 // ── Public HTML views ─────────────────────────────────────────────────────────
 
-/// `GET /board/:slug` — thread list rendered as HTML with OP body previews.
-///
-/// Uses `get_catalog` (which returns `ThreadSummary` with OP body) so the board
-/// index can show meaningful thread titles. Pagination is applied after the fetch
-/// since the catalog returns all threads sorted by bump time.
+/// `GET /board/:slug` — thread index with unified OP post headers.
 pub async fn show_board_html<TR: services::thread::ThreadRepo>(
     State(thread_service): State<Arc<TR>>,
     axum::extract::Extension(board_ctx): axum::extract::Extension<ExtractedBoardConfig>,
     Query(q): Query<PaginationQuery>,
 ) -> Result<impl IntoResponse, ApiError>
 {
-    // Use catalog (returns ThreadSummary with op_body) rather than raw Thread list.
     let all_threads = thread_service
         .get_catalog(board_ctx.board_id)
         .await
         .map_err(ApiError::from)?;
 
-    // Manual pagination on the in-memory catalog (typically ≤200 threads on a board).
     const PAGE_SIZE: usize = 15;
-    let total = all_threads.len();
-    let page_idx = (q.page as usize).saturating_sub(1);
-    let start = page_idx * PAGE_SIZE;
-    let threads: Vec<_> = all_threads.into_iter().skip(start).take(PAGE_SIZE).collect();
+    let total     = all_threads.len();
+    let page_idx  = (q.page as usize).saturating_sub(1);
+    let start     = page_idx * PAGE_SIZE;
     let total_pages = total.div_ceil(PAGE_SIZE).max(1) as u32;
+
+    let threads: Vec<BoardThreadDisplay> = all_threads
+        .into_iter()
+        .skip(start)
+        .take(PAGE_SIZE)
+        .map(|t| {
+            let mut hasher = Sha256::new();
+            hasher.update(t.op_ip_hash.0.as_bytes());
+            hasher.update(b"/");
+            hasher.update(t.thread_id.0.to_string().as_bytes());
+            let poster_id = hex::encode(&hasher.finalize()[..4]);
+            let tripcode_level = t.op_tripcode.as_deref().map(|tc| {
+                if tc.starts_with("!!!") { "super" }
+                else if tc.starts_with("!!") { "secure" }
+                else { "insecure" }
+            });
+            BoardThreadDisplay { thread: t, poster_id, tripcode_level }
+        })
+        .collect();
 
     let tmpl = BoardTemplate {
         board:        board_ctx.board,
@@ -59,7 +71,6 @@ pub async fn show_board_html<TR: services::thread::ThreadRepo>(
     };
     Ok(tmpl)
 }
-
 /// `GET /board/:slug/catalog` — catalog grid rendered as HTML.
 pub async fn show_catalog_html<TR: services::thread::ThreadRepo>(
     State(thread_service): State<Arc<TR>>,
@@ -75,22 +86,17 @@ pub async fn show_catalog_html<TR: services::thread::ThreadRepo>(
     Ok(tmpl)
 }
 
-/// `GET /board/:slug/thread/:id` — thread with posts, rendered as HTML.
+/// `GET /board/:slug/thread/:id` — thread with all posts, rendered as HTML.
 ///
-/// Accepts an optional `CurrentUser` extension (populated by the auth middleware when
-/// a valid session cookie is present). When the viewer holds a moderation role
-/// (`janitor`, `board_owner`, `board_volunteer`, or `admin`) the template receives
-/// a non-`None` `viewer_role` that enables the inline moderation toolbar and IP hash
-/// display on every post.
+/// Shows all posts in the thread (up to bump limit, 500) without pagination.
+/// Staff with `can_delete()` receive the mod toolbar via `viewer_role`.
 pub async fn show_thread_html<TR: services::thread::ThreadRepo>(
     State(thread_service): State<Arc<TR>>,
     axum::extract::Extension(board_ctx): axum::extract::Extension<ExtractedBoardConfig>,
     Path((_slug, thread_id)): Path<(String, uuid::Uuid)>,
-    Query(q): Query<PaginationQuery>,
     maybe_user: Option<axum::extract::Extension<domains::models::CurrentUser>>,
 ) -> Result<impl IntoResponse, ApiError>
 {
-    // Determine if the viewer has moderation rights (for the mod toolbar).
     let viewer_role: Option<String> = maybe_user
         .and_then(|axum::extract::Extension(u)| {
             if u.can_delete() {
@@ -111,51 +117,83 @@ pub async fn show_thread_html<TR: services::thread::ThreadRepo>(
         .await
         .map_err(ApiError::from)?;
 
-    let paginated_posts = thread_service
-        .list_posts(ThreadId(thread_id), Page::new(q.page))
+    // Load ALL posts — no pagination. Thread view shows every reply up to bump limit.
+    let all_posts = thread_service
+        .list_all_posts(ThreadId(thread_id))
         .await
         .map_err(ApiError::from)?;
 
     let is_closed = thread.closed;
     let thread_id_str = thread_id.to_string();
-    let total_pages   = paginated_posts.total_pages() as u32;
 
-    // Build PostDisplay entries — compute per-thread poster ID for each post.
-    // poster_id = first 8 hex chars of SHA-256(ip_hash + "/" + thread_id)
-    // Stable per poster per thread; different across threads.
-    let post_ids: Vec<_> = paginated_posts.items.iter().map(|p| p.id).collect();
+    let post_ids: Vec<_> = all_posts.iter().map(|p| p.id).collect();
     let mut attachments_map = thread_service
         .find_post_attachments(&post_ids)
         .await
         .map_err(ApiError::from)?;
 
-    let posts: Vec<PostDisplay> = paginated_posts.items.into_iter().map(|post| {
+    let posts: Vec<PostDisplay> = all_posts.into_iter().map(|post| {
         let mut hasher = Sha256::new();
         hasher.update(post.ip_hash.0.as_bytes());
         hasher.update(b"/");
         hasher.update(thread_id_str.as_bytes());
         let hash_bytes = hasher.finalize();
-        let poster_id  = hex::encode(&hash_bytes[..4]); // 8 hex chars
+        let poster_id  = hex::encode(&hash_bytes[..4]);
         let attachments = attachments_map.remove(&post.id).unwrap_or_default();
-        // Compute capcode fields from the stored tripcode value
         let capcode_role = post.tripcode.as_deref()
             .and_then(services::common::tripcode::capcode_role_str)
             .map(str::to_owned);
         let capcode_css  = capcode_role.as_deref()
             .map(services::common::tripcode::capcode_css_class);
-        PostDisplay { post, poster_id, attachments, capcode_role, capcode_css }
+        let tripcode_level = if capcode_role.is_some() {
+            None // capcode, not a tripcode
+        } else {
+            post.tripcode.as_deref().map(|t| {
+                if t.starts_with("!!!") { "super" }
+                else if t.starts_with("!!") { "secure" }
+                else { "insecure" }
+            })
+        };
+        let ip_hash_short = post.ip_hash.0.chars().take(10).collect();
+        PostDisplay { post, poster_id, attachments, capcode_role, capcode_css, tripcode_level, ip_hash_short }
     }).collect();
 
     let tmpl = ThreadTemplate {
-        board:        board_ctx.board,
+        board:       board_ctx.board,
         thread,
-        total_pages,
         posts,
-        current_page: q.page,
         is_closed,
         viewer_role,
     };
     Ok(tmpl)
+}
+
+/// `GET /board/:slug/post/:post_number` — redirect to the thread containing this post.
+///
+/// Resolves cross-board `>>>/{slug}/{N}` links. The post number is board-scoped
+/// (the `No.N` counter), not a UUID. Returns 303 to the correct thread anchor,
+/// or 404 if no post with that number exists on this board.
+pub async fn redirect_to_post<TR: services::thread::ThreadRepo>(
+    State(thread_service): State<Arc<TR>>,
+    axum::extract::Extension(board_ctx): axum::extract::Extension<ExtractedBoardConfig>,
+    Path((_slug, post_number)): Path<(String, u64)>,
+) -> Result<impl IntoResponse, ApiError>
+{
+    let thread_id = thread_service
+        .find_thread_id_by_post_number(board_ctx.board_id, post_number)
+        .await
+        .map_err(ApiError::from)?;
+
+    match thread_id {
+        Some(tid) => {
+            let url = format!(
+                "/board/{}/thread/{}#post-{}",
+                board_ctx.board.slug, tid, post_number
+            );
+            Ok(axum::response::Redirect::to(&url).into_response())
+        }
+        None => Err(ApiError::NotFound(format!("Post #{post_number} not found on this board"))),
+    }
 }
 
 // ── JSON API variants ─────────────────────────────────────────────────────────

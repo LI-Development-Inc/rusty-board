@@ -41,8 +41,8 @@
   {% for thread in threads %}
   <div class="catalog-item">
     <a href="/board/{{ board.slug }}/thread/{{ thread.thread_id }}">
-      {% if thread.thumbnail_key.is_some() %}
-      <img src="/media/{{ thread.thumbnail_key.as_ref().unwrap() }}"
+      {% if let Some(tk) = thread.thumbnail_key.as_ref() %}
+      <img src="/media/{{ tk.0 }}"
            alt="Thread thumbnail" class="catalog-thumb">
       {% else %}
       <div class="catalog-thumb catalog-thumb--no-image">No image</div>
@@ -50,7 +50,7 @@
     </a>
     <div class="catalog-info">
       <div class="catalog-replies">R: {{ thread.reply_count }}</div>
-      <div class="catalog-excerpt">{{ thread.op_body }}</div>
+      <div class="catalog-excerpt">{{ thread.op_body|truncate(200) }}</div>
     </div>
   </div>
   {% endfor %}

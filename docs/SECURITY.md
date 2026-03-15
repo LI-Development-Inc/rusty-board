@@ -99,9 +99,9 @@ Rate limiting can be bypassed if the Redis adapter fails — the default failure
 
 | Limitation | Severity | Planned Fix |
 |------------|----------|-------------|
-| No CAPTCHA support | Medium | v1.1 — `BoardConfig.captcha_required` stub present |
+| No CAPTCHA support | Medium | v1.1.1 — `BoardConfig.captcha_required` field + port defined; adapter not yet wired |
 | Rate limiter fail-open on Redis outage | Low | Accepted trade-off; monitor Redis health |
-| No brute-force protection on login | Low | v1.1 — account lockout after N failures |
+| No brute-force protection on login | Low | v1.1.1 — account lockout after N failures |
 | SHA-256 IP hashing (not SHA-3) | Info | Cryptographically sufficient for this use case |
 | No Tor/proxy detection (DNSBL) | Low | v1.2 — port defined, adapter not yet built |
 | JWT `HS256` (symmetric) | Info | Sufficient for single-deployment; RS256 for v1.1 if needed |

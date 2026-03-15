@@ -176,6 +176,19 @@
     function buildPanel() {
       var p = document.createElement('div');
       p.id = 'settings-panel';
+
+      // Build time-format row only on thread pages (sentinel element present)
+      var isThreadPage = !!document.getElementById('rb-thread-page');
+      var timeFmtRow = isThreadPage
+        ? '<label style="display:block;margin-top:.5rem;margin-bottom:.4rem">Timestamp format<br>' +
+            '<select id="rb-time-fmt" style="margin-top:.2rem">' +
+              '<option value="relative">Relative (2h ago)</option>' +
+              '<option value="datetime">Date/Time (MM/DD/YY HH:MM:SS)</option>' +
+              '<option value="iso">ISO 8601</option>' +
+            '</select>' +
+          '</label>'
+        : '';
+
       p.innerHTML =
         '<div id="settings-inner">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">' +
@@ -187,12 +200,18 @@
               THEMES.map(function(t) { return '<option value="' + t + '">' + LABELS[t] + '</option>'; }).join('') +
             '</select>' +
           '</label>' +
+          timeFmtRow +
         '</div>';
       document.body.appendChild(p);
       var sel = document.getElementById('theme-select');
       var cur = localStorage.getItem('theme') || 'default';
       sel.value = cur;
       sel.addEventListener('change', function() { applyTheme(this.value); });
+      // Restore saved time-format selection when panel is built
+      if (isThreadPage) {
+        var tfSel = document.getElementById('rb-time-fmt');
+        tfSel.value = localStorage.getItem('rb:time-fmt') || 'relative';
+      }
       document.getElementById('settings-close').addEventListener('click', function() {
         p.style.display = 'none';
       });
@@ -211,6 +230,127 @@
     var saved = localStorage.getItem('theme');
     if (saved && saved !== 'default') {
       document.getElementById('theme-css').href = '/static/css/' + saved + '.css';
+    }
+  })();
+
+  // ── Post body formatting (runs on every page with .post-body elements) ──────
+  (function() {
+    // Askama HTML-escapes post text: >→&gt;  <→&lt;
+    //
+    // Line-scoped:  >text=greentext  <text=pinktext  ==text===redtext  (((text)))=bluetext
+    // Inline:       **bold**  __underline__  ~~strike~~  `code`
+    // Multi-line:   ```fenced code```   [spoiler]...[/spoiler]
+
+    function applyQuoteLinks(html) {
+      var RE = new RegExp(
+        '(&gt;&gt;&gt;/([a-z0-9_-]+)/(\\d+))' +
+        '|(&gt;&gt;&gt;/([a-z0-9_-]+)/)' +
+        '|(&gt;&gt;(\\d+))',
+        'g'
+      );
+      return html.replace(RE, function(_, g1, slug_n, n, g4, slug, g6, sn) {
+        if (g1) {
+          return '<a class="post-quote-link cross-board"' +
+                 ' href="/board/' + slug_n + '/post/' + n + '"' +
+                 ' data-xboard="' + slug_n + '" data-target="' + n + '"' +
+                 '>&gt;&gt;&gt;/' + slug_n + '/' + n + '</a>';
+        }
+        if (g4) {
+          return '<a class="post-quote-link cross-board"' +
+                 ' href="/board/' + slug + '">&gt;&gt;&gt;/' + slug + '/</a>';
+        }
+        return '<a class="post-quote-link" href="#post-' + sn + '"' +
+               ' data-target="' + sn + '">&gt;&gt;' + sn + '</a>';
+      });
+    }
+
+    function applyInline(html) {
+      html = html.replace(/`([^`\n]+)`/g,   '<code>$1</code>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/__(.+?)__/g,     '<u>$1</u>');
+      html = html.replace(/~~(.+?)~~/g,     '<s>$1</s>');
+      return html;
+    }
+
+    window.rbFormatPostBody = function(raw) {
+      // Pre-pass: multi-line blocks before line splitting.
+      raw = raw.replace(/```([^`]*?)```/gs, function(_, inner) {
+        inner = inner.replace(/^\n/, '').replace(/\n$/, '');
+        return '<pre class="code-block"><code>' + inner + '</code></pre>';
+      });
+      raw = raw.replace(/\[spoiler\]([\s\S]+?)\[\/spoiler\]/gi, function(_, inner) {
+        return '<span class="spoiler">' + inner + '</span>';
+      });
+      return raw.split('\n').map(function(line) {
+        var t = line.trimStart();
+        if (/^&gt;(?!&gt;)/.test(t))
+          return '<span class="greentext">' + applyQuoteLinks(applyInline(line)) + '</span>';
+        if (/^&lt;/.test(t))
+          return '<span class="pinktext">' + applyInline(line) + '</span>';
+        var rm = t.match(/^==(.+)==$/);
+        if (rm) return '<span class="redtext">' + applyInline(rm[1]) + '</span>';
+        var bm = t.match(/^\(\(\((.+)\)\)\)$/);
+        if (bm) return '<span class="bluetext">' + applyInline(bm[1]) + '</span>';
+        return applyQuoteLinks(applyInline(line));
+      }).join('\n');
+    };
+
+    // ── Timestamp formatting ─────────────────────────────────────────────────
+    var TIME_FMT_KEY = 'rb:time-fmt';
+    window.rbTimeFmt = localStorage.getItem(TIME_FMT_KEY) || 'relative';
+
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+    window.rbFormatTs = function(ts) {
+      var d = new Date(ts * 1000);
+      if (window.rbTimeFmt === 'datetime') {
+        return (d.getMonth()+1) + '/' + pad2(d.getDate()) + '/' +
+               String(d.getFullYear()).slice(2) + ' ' +
+               pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+      }
+      if (window.rbTimeFmt === 'iso') {
+        return d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
+      }
+      var secs = Math.floor(Date.now() / 1000 - ts);
+      if (secs < 60)    return secs + 's ago';
+      if (secs < 3600)  return Math.floor(secs / 60) + 'm ago';
+      if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
+      return Math.floor(secs / 86400) + 'd ago';
+    };
+
+    window.rbApplyTimeFormat = function() {
+      document.querySelectorAll('time.post-date[data-ts]').forEach(function(el) {
+        el.textContent = window.rbFormatTs(parseInt(el.dataset.ts, 10));
+      });
+    };
+
+    // Listen for settings-panel time-format changes (event delegation).
+    document.addEventListener('change', function(e) {
+      if (e.target.id === 'rb-time-fmt') {
+        window.rbTimeFmt = e.target.value;
+        localStorage.setItem(TIME_FMT_KEY, window.rbTimeFmt);
+        window.rbApplyTimeFormat();
+      }
+    });
+
+    // ── Run on every page ────────────────────────────────────────────────────
+    function run() {
+      // Format all post bodies.
+      document.querySelectorAll('.post-body').forEach(function(el) {
+        el.innerHTML = window.rbFormatPostBody(el.innerHTML);
+      });
+      // Apply saved timestamp format.
+      window.rbApplyTimeFormat();
+      // Refresh relative timestamps every 60s.
+      setInterval(function() {
+        if (window.rbTimeFmt === 'relative') window.rbApplyTimeFormat();
+      }, 60000);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run);
+    } else {
+      run();
     }
   })();
   </script>

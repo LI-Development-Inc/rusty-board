@@ -25,15 +25,21 @@ use services::common::utils::hash_ip;
 /// - `body` — post body text
 /// - `files` (0..N file parts) — attachments
 ///
+/// **Response negotiation**:
+/// - Browser form submissions (`Accept: text/html`, default): 303 redirect to the new post
+/// - Fetch requests from `thread.html` (`Accept: application/json`): 201 JSON with
+///   `{ post_number, thread_id, redirect }` so the JS can store the number in
+///   localStorage for (You) tracking before navigating.
+///
 /// The real IP is extracted from the peer address (set by reverse proxy middleware),
 /// immediately SHA-256 hashed with a daily salt, and never stored raw.
 pub async fn create_post<PR, TR, BR, MS, RL, MP>(
     State(post_service): State<Arc<PostService<PR, TR, BR, MS, RL, MP>>>,
     axum::extract::ConnectInfo(peer_addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
     axum::extract::Extension(board_ctx): axum::extract::Extension<ExtractedBoardConfig>,
-    // Optional — present if a valid JWT was supplied; absent for anonymous users.
     current_user: Option<axum::extract::Extension<domains::models::CurrentUser>>,
     Path(_slug): Path<String>,
+    headers: axum::http::HeaderMap,
     mut multipart: Multipart,
 ) -> Result<axum::response::Response, ApiError>
 where
@@ -124,18 +130,31 @@ where
     let thread_id = result.thread.id;
     let post_num  = result.post.post_number;
 
-    // Browser form submissions get a redirect to the new post.
-    // API clients should use the board's thread/post read endpoints.
     let redirect_url = format!(
         "/board/{}/thread/{}#post-{}",
         board_slug, thread_id, post_num
     );
-    // TODO v1.1.1: add `X-Post-Number: {post_num}` response header so the thread.html
-    // JavaScript can store the number in localStorage for (You) tracking without needing
-    // to parse the Location/redirect URL.  Use `axum::response::AppendHeaders` to attach
-    // it alongside the Redirect, e.g.:
-    //   use axum::response::AppendHeaders;
-    //   return Ok((AppendHeaders([("X-Post-Number", post_num.to_string())]),
-    //              Redirect::to(&redirect_url)).into_response());
-    Ok(axum::response::Redirect::to(&redirect_url).into_response())
+
+    // Fetch from thread.html JS sends Accept: application/json so it can extract
+    // the post_number for (You) localStorage tracking before navigating.
+    // Regular form submissions (Accept: text/html) get the traditional 303 redirect.
+    let wants_json = headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.contains("application/json"))
+        .unwrap_or(false);
+
+    if wants_json {
+        use axum::Json;
+        Ok((
+            axum::http::StatusCode::CREATED,
+            Json(serde_json::json!({
+                "post_number": post_num,
+                "thread_id":   thread_id.to_string(),
+                "redirect":    redirect_url,
+            }))
+        ).into_response())
+    } else {
+        Ok(axum::response::Redirect::to(&redirect_url).into_response())
+    }
 }

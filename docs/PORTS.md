@@ -201,6 +201,23 @@ pub trait PostRepository: Send + Sync + 'static {
         query: &str,
         page: Page,
     ) -> Result<Paginated<Post>, DomainError>;
+
+    /// All posts in a thread ordered by post_number ASC, up to 500 rows. Added v1.2-ux.
+    ///
+    /// Used by the thread view which shows every post without pagination.
+    /// The 500-row cap matches the maximum bump limit — threads never exceed this size.
+    async fn find_all_by_thread(&self, thread_id: ThreadId) -> Result<Vec<Post>, DomainError>;
+
+    /// Resolve a board-scoped post number to the ThreadId that contains it. Added v1.2-ux.
+    ///
+    /// Used by the `GET /board/{slug}/post/{N}` redirect handler which resolves
+    /// cross-board `>>>/{slug}/{N}` links. Returns `None` when no post with that
+    /// number exists on the board.
+    async fn find_thread_id_by_post_number(
+        &self,
+        board_id: BoardId,
+        post_number: u64,
+    ) -> Result<Option<ThreadId>, DomainError>;
 }
 ```
 
@@ -742,7 +759,7 @@ pub trait FederationSync: Send + Sync + 'static {
 |------|-------------|------|------|------|
 | `BoardRepository` | `PgBoardRepository` ✅ | — | `SqliteBoardRepository` | `SurrealBoardRepository` |
 | `ThreadRepository` | `PgThreadRepository` ✅ | — | `SqliteThreadRepository` | — |
-| `PostRepository` | `PgPostRepository` ✅ | `search_fulltext` added ✅ | `SqlitePostRepository` | — |
+| `PostRepository` | `PgPostRepository` ✅ | `search_fulltext` ✅, `find_all_by_thread` ✅, `find_thread_id_by_post_number` ✅ | `SqlitePostRepository` | — |
 | `BanRepository` | `PgBanRepository` ✅ | — | `SqliteBanRepository` | — |
 | `FlagRepository` | `PgFlagRepository` ✅ | — | `SqliteFlagRepository` | — |
 | `AuditRepository` | `PgAuditRepository` ✅ | audit log pages ✅ (`find_all`, `find_by_board` added) | `SqliteAuditRepository` | — |

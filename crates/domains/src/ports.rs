@@ -246,6 +246,22 @@ pub trait PostRepository: Send + Sync + 'static {
         query: &str,
         page: Page,
     ) -> Result<Paginated<Post>, DomainError>;
+
+    /// All posts in a thread, ordered by `post_number ASC`, up to 500 rows.
+    ///
+    /// Used by the thread view which shows every post without pagination (up to the
+    /// bump limit). Callers should not assume the list is exhaustive beyond 500 posts.
+    async fn find_all_by_thread(&self, thread_id: ThreadId) -> Result<Vec<Post>, DomainError>;
+
+    /// Resolve a board-scoped post number to its containing `ThreadId`.
+    ///
+    /// Used by the cross-board `>>>/{slug}/{N}` redirect handler. Returns `None`
+    /// when no post with that number exists on the board.
+    async fn find_thread_id_by_post_number(
+        &self,
+        board_id: crate::models::BoardId,
+        post_number: u64,
+    ) -> Result<Option<ThreadId>, DomainError>;
 }
 
 /// Persistence boundary for `Ban` records.

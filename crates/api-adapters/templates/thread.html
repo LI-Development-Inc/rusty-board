@@ -1,52 +1,53 @@
 {% extends "base.html" %}
-{% block title %}/{{ board.slug }}/ — Thread No.{{ thread.id }}{% endblock %}
+{% block title %}/{{ board.slug }}/ — Thread{% endblock %}
 
 {% block head %}
 <style>
 /* ── Mod toolbar ──────────────────────────────────────────── */
 .mod-toolbar { display:inline; margin-left:.4rem; }
 .mod-btn {
-  display:inline-block;
-  margin:0 1px;
-  padding:0 3px;
-  font-size:.75em;
-  font-family:monospace;
-  color:#800;
-  border:1px solid #c88;
-  border-radius:2px;
-  cursor:pointer;
-  user-select:none;
-  white-space:nowrap;
+  display:inline-block; margin:0 1px; padding:0 3px;
+  font-size:.75em; font-family:monospace; color:#800;
+  border:1px solid #c88; border-radius:2px;
+  cursor:pointer; user-select:none; white-space:nowrap;
 }
 .mod-btn:hover { background:#fee; color:#500; border-color:#800; }
-.mod-ip-hash {
-  font-size:.72em;
-  color:#888;
-  font-family:monospace;
-  margin:0 .3rem;
-  user-select:all;
-}
+.mod-ip-hash { font-size:.72em; color:#888; font-family:monospace; margin:0 .3rem; user-select:all; }
 /* Ban modal */
 #ban-modal {
-  display:none;
-  position:fixed;inset:0;background:rgba(0,0,0,.5);
-  z-index:10000;align-items:center;justify-content:center;
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+  z-index:10000; align-items:center; justify-content:center;
 }
 #ban-modal.open { display:flex; }
 #ban-modal-inner {
-  background:var(--bg,#fff);
-  border:1px solid var(--border,#ccc);
-  border-radius:4px;
-  padding:1.25rem 1.5rem;
-  min-width:320px;max-width:480px;
-  width:95%;
+  background:var(--bg,#fff); border:1px solid var(--border,#ccc);
+  border-radius:4px; padding:1.25rem 1.5rem; min-width:320px; max-width:480px; width:95%;
 }
-#ban-modal label { display:block;margin:.4rem 0 .15rem; font-size:.9em; }
+#ban-modal label { display:block; margin:.4rem 0 .15rem; font-size:.9em; }
 #ban-modal input, #ban-modal select, #ban-modal textarea {
-  width:100%;box-sizing:border-box;
-  border:1px solid var(--border,#ccc);
-  border-radius:2px;padding:.3rem .4rem;
-  font-size:.9em;
+  width:100%; box-sizing:border-box; border:1px solid var(--border,#ccc);
+  border-radius:2px; padding:.3rem .4rem; font-size:.9em;
+}
+/* ── Settings bar removed — time-format lives in the settings panel (base.html)
+   and auto-update lives in the bottom nav below the posts. ── */
+/* ── Shared form in QR: compact layout ── */
+#shared-reply-form.in-qr {
+  padding: .4rem;
+}
+#shared-reply-form.in-qr .form-row {
+  flex-direction: column;
+  gap: .2rem;
+}
+#shared-reply-form.in-qr .form-label {
+  font-size: .82em;
+}
+#shared-reply-form.in-qr textarea {
+  rows: 4;
+  min-height: 80px;
+}
+#shared-reply-form.in-qr input[type=text] {
+  width: 100%;
+  box-sizing: border-box;
 }
 </style>
 {% endblock %}
@@ -72,14 +73,18 @@
 <div class="reply-form" id="top-reply-form">
   <details open>
     <summary>▼ Reply to Thread</summary>
-    <form action="/board/{{ board.slug }}/post" method="POST" enctype="multipart/form-data" data-reply-form>
+    <!-- #shared-reply-form is the single form element used by both the top position
+         and the Quick Reply box. JS moves it between the two containers — there is
+         never a copy, so content is always in sync with zero effort. -->
+    <form id="shared-reply-form" action="/board/{{ board.slug }}/post" method="POST"
+          enctype="multipart/form-data" data-reply-form>
       <input type="hidden" name="thread_id" value="{{ thread.id }}">
       <div class="form-row">
         <label class="form-label">Name
-          <input type="text" name="name" placeholder="Anonymous  (use #pass for tripcode)" maxlength="64" title="Name field. Append #password for tripcode, ##password for secure tripcode, or ### Role for staff capcode.">
+          <input type="text" id="reply-name" name="name" placeholder="Anonymous  (use #pass for tripcode)" maxlength="64">
         </label>
         <label class="form-label">Email
-          <input type="text" name="email" placeholder="sage" maxlength="64">
+          <input type="text" id="reply-email" name="email" placeholder="sage" maxlength="64">
         </label>
       </div>
       <label class="form-label">Comment
@@ -103,7 +108,6 @@
   <div class="post {% if loop.index == 1 %}op-post{% else %}reply-post{% endif %}"
        id="post-{{ pd.post.post_number }}"
        data-post-id="{{ pd.post.id }}"
-       data-post-number="{{ pd.post.post_number }}"
        data-thread-id="{{ thread.id }}"
        data-ip-hash="{{ pd.post.ip_hash }}"
        data-is-op="{% if loop.index == 1 %}1{% else %}0{% endif %}">
@@ -112,31 +116,26 @@
       {% if pd.capcode_role.is_some() %}
       <span class="post-capcode capcode--{{ pd.capcode_css.as_ref().unwrap() }}" title="Verified staff identity">!!!! {{ pd.capcode_role.as_ref().unwrap() }}</span>
       {% elif pd.post.tripcode.is_some() %}
-      <span class="post-tripcode">{{ pd.post.tripcode.as_ref().unwrap() }}</span>
+      <span class="post-tripcode" data-level="{{ pd.tripcode_level.unwrap() }}">{{ pd.post.tripcode.as_ref().unwrap() }}</span>
       {% endif %}
-      <span class="post-date">{{ pd.post.created_at }}</span>
+      <span class="post-you" style="display:none;color:#789922;font-weight:bold"> (You)</span>
+      <time class="post-date" data-ts="{{ pd.post.created_at.timestamp() }}">{{ pd.post.created_at }}</time>
       <span class="poster-id" style="background:#{{ pd.poster_id }};color:#fff;border-color:#{{ pd.poster_id }}" title="Poster ID">ID: {{ pd.poster_id }}</span>
       {% if viewer_role.is_some() %}
-      <span class="mod-ip-hash" title="IP hash (mod only)">IP: {{ pd.post.ip_hash }}</span>
+      <span class="mod-ip-hash" title="IP hash (mod only)">IP: {{ pd.ip_hash_short }}</span>
       {% endif %}
       <a class="post-number" href="#post-{{ pd.post.post_number }}" data-post-number="{{ pd.post.post_number }}">No.{{ pd.post.post_number }}</a>
-      <span class="post-you" style="display:none;color:#789922;font-weight:bold">(You)</span>
       <a class="post-flag-link" href="javascript:void(0)" data-thread="{{ thread.id }}" data-board="{{ board.slug }}">[Flag]</a>
       {% if viewer_role.is_some() %}
       <span class="mod-toolbar" data-post-id="{{ pd.post.id }}" data-ip-hash="{{ pd.post.ip_hash }}" data-thread-id="{{ thread.id }}" data-is-op="{% if loop.index == 1 %}1{% else %}0{% endif %}" data-sticky="{{ thread.sticky }}" data-closed="{{ is_closed }}">
-        <span class="mod-btn" data-action="D"      title="Delete this post">[D]</span>
-        <span class="mod-btn" data-action="D*"     title="Delete all posts by this IP in thread">[D*]</span>
-        <span class="mod-btn" data-action="B"      title="Ban this IP">[B]</span>
-        <span class="mod-btn" data-action="BD"     title="Ban IP and delete this post">[B&amp;D]</span>
-        <span class="mod-btn" data-action="BD*"    title="Ban IP and delete all posts by IP in thread">[B&amp;D*]</span>
+        <span class="mod-btn" data-action="D"   title="Delete this post">[D]</span>
+        <span class="mod-btn" data-action="D*"  title="Delete all posts by this IP in thread">[D*]</span>
+        <span class="mod-btn" data-action="B"   title="Ban this IP">[B]</span>
+        <span class="mod-btn" data-action="BD"  title="Ban IP and delete this post">[B&amp;D]</span>
+        <span class="mod-btn" data-action="BD*" title="Ban IP and delete all posts by IP in thread">[B&amp;D*]</span>
         {% if loop.index == 1 %}
-        <span class="mod-btn" data-action="S"      title="Toggle sticky on this thread">[{% if thread.sticky %}S-{% else %}S+{% endif %}]</span>
-        {# TODO v1.2: [C] should toggle cycle mode (posts prune oldest at bump limit), not close.
-           Cycle needs a `cycle` bool column on `threads` + pruning logic in PostService.
-           For now [C] maps to close/re-open. #}
-        <span class="mod-btn" data-action="C"      title="Close/Re-open thread (TODO v1.2: become Cycle toggle)">[{% if is_closed %}C-{% else %}C+{% endif %}]</span>
-        {# TODO v1.2: [Pin] pins a post in a cycle thread so it is never pruned.
-           Requires `pinned` bool column on `posts` + prune exclusion in PostService. #}
+        <span class="mod-btn" data-action="S" title="Toggle sticky">[{% if thread.sticky %}S-{% else %}S+{% endif %}]</span>
+        <span class="mod-btn" data-action="C" title="Close/Re-open thread (TODO v1.2: Cycle)">[{% if is_closed %}C-{% else %}C+{% endif %}]</span>
         {% endif %}
       </span>
       {% endif %}
@@ -165,20 +164,16 @@
   {% endfor %}
 </div>
 
-<div class="pagination">
-  {% if current_page > 1 %}
-  <a href="/board/{{ board.slug }}/thread/{{ thread.id }}?page={{ current_page - 1 }}">[Prev]</a>
-  {% endif %}
-  Page {{ current_page }} of {{ total_pages }}
-  {% if current_page < total_pages %}
-  <a href="/board/{{ board.slug }}/thread/{{ thread.id }}?page={{ current_page + 1 }}">[Next]</a>
-  {% endif %}
-</div>
-
 <div class="thread-bottom-nav">
   <a href="/board/{{ board.slug }}">[Back to /{{ board.slug }}/]</a>
   <a href="#top-reply-form">[Reply]</a>
+  <label class="auto-update-label" title="Automatically check for new posts">
+    <input type="checkbox" id="rb-auto-update"> Auto-update
+  </label>
+  <span id="rb-auto-status" style="color:var(--color-muted,#888);font-size:.85em"></span>
 </div>
+<!-- Sentinel: tells base.html settings panel to inject time-format control -->
+<span id="rb-thread-page" style="display:none"></span>
 
 <!-- Ban modal (mod only) -->
 <div id="ban-modal" role="dialog" aria-modal="true" aria-label="Ban IP">
@@ -220,16 +215,15 @@
 {% block scripts %}
 <script>
 (function() {
-  var THREAD_ID  = '{{ thread.id }}';
-  var BOARD_SLUG = '{{ board.slug }}';
-  var IS_MOD     = {{ viewer_role.is_some()|lower }};
-  var THREAD_UUID = '{{ thread.id }}';
+  'use strict';
+
+  var THREAD_ID    = '{{ thread.id }}';
+  var BOARD_SLUG   = '{{ board.slug }}';
+  var IS_MOD       = {{ viewer_role.is_some()|lower }};
   var THREAD_STICKY = {{ thread.sticky|lower }};
   var THREAD_CLOSED = {{ is_closed|lower }};
 
   /* ── (You) tracking ──────────────────────────────────────────────────── */
-  // When a post is submitted we store the post_number so we can mark it.
-  // Key: "you:THREAD_ID" → JSON array of post numbers.
   var YOU_KEY = 'you:' + THREAD_ID;
   function getYouNums() {
     try { return JSON.parse(localStorage.getItem(YOU_KEY) || '[]'); }
@@ -240,22 +234,27 @@
     if (!nums.length) return;
     var numSet = {};
     nums.forEach(function(n) { numSet[String(n)] = true; });
-    document.querySelectorAll('.post[data-post-number]').forEach(function(el) {
-      var n = el.dataset.postNumber;
-      if (numSet[n]) {
+    // Mark posts belonging to the viewer — find by id="post-{N}" pattern.
+    document.querySelectorAll('.post[id^="post-"]').forEach(function(el) {
+      var num = el.id.replace('post-', '');
+      if (numSet[num]) {
         var badge = el.querySelector('.post-you');
         if (badge) badge.style.display = 'inline';
       }
     });
-    // Also mark >>N quote links that reference (You) posts
+    // Annotate >>N quote links pointing at (You) posts
     document.querySelectorAll('.post-quote-link[data-target]').forEach(function(a) {
-      if (numSet[a.dataset.target] && !a.querySelector('.you-ref')) {
-        a.insertAdjacentHTML('afterend', '<span class="you-ref" style="color:#789922;font-size:.85em"> (You)</span>');
+      if (numSet[a.dataset.target] && !a.nextSibling?.classList?.contains('you-ref')) {
+        var span = document.createElement('span');
+        span.className = 'you-ref';
+        span.style.cssText = 'color:#789922;font-size:.85em';
+        span.textContent = ' (You)';
+        a.insertAdjacentElement('afterend', span);
       }
     });
   }
 
-  /* ── Fetch-based reply form ───────────────────────────────────────────── */
+  /* ── Fetch-based reply form — request JSON to get post_number ─────────── */
   document.addEventListener('submit', function(e) {
     var form = e.target.closest('[data-reply-form]');
     if (!form) return;
@@ -264,134 +263,209 @@
     var origText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
 
-    fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
-      .then(function(r) {
-        if (r.ok || r.status === 201 || r.status === 204) {
-          // Try to get post_number from response header, fallback to reload
-          var loc = r.headers.get('X-Post-Number') || r.headers.get('Location') || '';
-          var m = loc.match(/(\d+)$/);
-          if (m) {
+    // Pause auto-update while the request is in-flight so a scheduled
+    // window.location.reload() cannot race with our own navigation.
+    if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+
+    fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    })
+    .then(function(r) {
+      if (r.status === 201 || r.ok) {
+        return r.json().then(function(data) {
+          // Store post_number for (You) tracking before navigating.
+          if (data.post_number) {
             var nums = getYouNums();
-            nums.push(parseInt(m[1], 10));
+            nums.push(data.post_number);
             localStorage.setItem(YOU_KEY, JSON.stringify(nums));
           }
-          window.location.reload();
-          return;
-        }
-        r.json().catch(function() { return {}; }).then(function(body) {
-          var msg = body.message || 'An error occurred. Please try again.';
-          if (r.status === 429)      window.rbToast.error('⏳ Rate limit — ' + msg);
-          else if (r.status === 403) window.rbToast.error('🚫 ' + msg);
-          else if (r.status === 422 || r.status === 400) window.rbToast.warn('⚠ ' + msg);
-          else                       window.rbToast.error(msg);
-          if (btn) { btn.disabled = false; btn.textContent = origText; }
+          // Navigate to the thread root (no hash) so the browser performs a
+          // full page reload and fetches the new post.  If we navigated to
+          // the hash-anchor directly the browser would only scroll — not reload.
+          var dest = (data.redirect || window.location.pathname).split('#')[0];
+          window.location.href = dest;
         });
-      })
-      .catch(function() {
-        window.rbToast.error('Network error — check your connection.');
+      }
+      // Error — 413 comes from the framework before our handler runs so the
+      // body may not be JSON; handle both cases gracefully.
+      if (r.status === 413) {
+        window.rbToast.error('⚠ File too large — max upload size is 10 MB per post.');
         if (btn) { btn.disabled = false; btn.textContent = origText; }
+        if (autoChk && autoChk.checked) scheduleAutoUpdate();
+        return;
+      }
+      return r.json().catch(function() { return {}; }).then(function(body) {
+        var msg = body.message || body.error || 'An error occurred — please try again.';
+        if (r.status === 429)      window.rbToast.error('⏳ Rate limit — ' + msg);
+        else if (r.status === 403) window.rbToast.error('🚫 ' + msg);
+        else if (r.status === 422 || r.status === 400) window.rbToast.warn('⚠ ' + msg);
+        else                       window.rbToast.error(msg);
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        // Resume auto-update if it was running.
+        if (autoChk && autoChk.checked) scheduleAutoUpdate();
       });
+    })
+    .catch(function() {
+      window.rbToast.error('Network error — check your connection.');
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+      if (autoChk && autoChk.checked) scheduleAutoUpdate();
+    });
   });
 
-  /* ── Quick Reply ──────────────────────────────────────────────────────── */
-  var qr = null;
-  function getQR() {
-    if (qr) return qr;
+  /* ── Quick Reply — shared form architecture ──────────────────────────── */
+  //
+  // There is exactly ONE <form id="shared-reply-form"> in the DOM.
+  // The QR box is a draggable shell with a <div id="qr-form-slot"> placeholder.
+  // openQR() physically moves the form into the slot; closeQR() moves it back.
+  // Because the element never changes, all typed content is preserved perfectly
+  // between the two positions with no copying or syncing required.
+
+  var qrBox   = null;  // the outer draggable container
+  var qrSlot  = null;  // the inner div where the form lives when QR is active
+  var qrOpen  = false;
+
+  function getSharedForm() {
+    return document.getElementById('shared-reply-form');
+  }
+
+  function buildQR() {
     var box = document.createElement('div');
-    box.id = 'quick-reply';
+    box.id        = 'quick-reply';
     box.className = 'quick-reply';
+    box.style.display = 'none';
     box.innerHTML =
-      '<div class="qr-header"><strong>Quick Reply</strong>' +
-        '<a href="javascript:void(0)" class="qr-close">x</a></div>' +
-      '<form action="/board/' + BOARD_SLUG + '/post" method="POST"' +
-            ' enctype="multipart/form-data" data-reply-form>' +
-        '<input type="hidden" name="thread_id" value="' + THREAD_UUID + '">' +
-        '<input type="text" name="name" placeholder="Name" class="qr-input">' +
-        '<input type="text" name="email" placeholder="Email / sage" class="qr-input">' +
-        '<textarea name="body" id="qr-body" rows="4" placeholder="Comment..." class="qr-textarea"></textarea>' +
-        '<div class="qr-row">' +
-          '<input type="file" name="files" accept="image/*" class="qr-file">' +
-          '<button type="submit" class="btn-reply">Reply</button>' +
-        '</div>' +
-      '</form>';
+      '<div class="qr-header">' +
+        '<strong>Quick Reply</strong>' +
+        '<a href="javascript:void(0)" class="qr-close" title="Back to top form">✕</a>' +
+      '</div>' +
+      '<div id="qr-form-slot"></div>';
     document.body.appendChild(box);
-    qr = box;
+    qrBox  = box;
+    qrSlot = box.querySelector('#qr-form-slot');
+
+    // Drag
     var hdr = box.querySelector('.qr-header');
     var dragging = false, ox = 0, oy = 0;
     hdr.addEventListener('mousedown', function(e) {
+      if (e.target.classList.contains('qr-close')) return;
       dragging = true; ox = e.clientX - box.offsetLeft; oy = e.clientY - box.offsetTop;
     });
     document.addEventListener('mousemove', function(e) {
       if (!dragging) return;
-      box.style.left = (e.clientX - ox) + 'px';
-      box.style.top  = (e.clientY - oy) + 'px';
-      box.style.right = 'auto'; box.style.bottom = 'auto';
+      box.style.left  = (e.clientX - ox) + 'px';
+      box.style.top   = (e.clientY - oy) + 'px';
+      box.style.right  = 'auto';
+      box.style.bottom = 'auto';
     });
     document.addEventListener('mouseup', function() { dragging = false; });
-    box.querySelector('.qr-close').addEventListener('click', function() {
-      box.style.display = 'none';
-    });
+
+    box.querySelector('.qr-close').addEventListener('click', closeQR);
     return box;
   }
+
   function openQR(quoteNum) {
-    var box = getQR();
-    box.style.display = 'block';
-    var ta = box.querySelector('#qr-body');
-    if (quoteNum) ta.value = '>>' + quoteNum + '\n' + ta.value;
-    ta.focus();
+    if (!qrBox) buildQR();
+
+    // Move the shared form into the QR slot (if not already there).
+    var form = getSharedForm();
+    if (form && form.parentNode !== qrSlot) {
+      qrSlot.appendChild(form);
+    }
+
+    // Style the form for compact QR layout.
+    if (form) form.classList.add('in-qr');
+
+    // Collapse the top shell so it doesn't show an empty details box.
+    var topDetails = document.querySelector('#top-reply-form details');
+    if (topDetails) topDetails.removeAttribute('open');
+
+    qrBox.style.display = 'block';
+    qrOpen = true;
+
+    // Append >>N at the end on a new line — but only if that exact line
+    // isn't already the last line (prevents duplicates on repeated clicks).
+    var ta = document.getElementById('reply-body');
+    if (ta && quoteNum) {
+      var tag   = '>>' + quoteNum;
+      var lines = ta.value.trimEnd().split('\n');
+      var last  = lines[lines.length - 1];
+      if (last !== tag) {
+        var prefix = ta.value.length > 0 ? ta.value.trimEnd() + '\n' : '';
+        ta.value = prefix + tag + '\n';
+      }
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = ta.value.length;
+    } else if (ta) {
+      ta.focus();
+    }
   }
-  document.addEventListener('click', function(e) {
-    var num = e.target.closest('[data-post-number]');
-    if (num && !e.target.closest('.mod-toolbar')) { e.preventDefault(); openQR(num.dataset.postNumber); }
-  });
 
-  /* ── Quote linkification (single-pass combined regex) ────────────────── */
-  // Single regex pass prevents Pass 2 from corrupting already-replaced Pass 1 anchors.
-  // Groups: (1,2,3)=xboard+postnum  (4,5)=xboard-only  (6,7)=same-thread
-  var RE = new RegExp(
-    '(&gt;&gt;&gt;/([a-z0-9_-]+)/(\\d+))' +
-    '|(&gt;&gt;&gt;/([a-z0-9_-]+)/)' +
-    '|(&gt;&gt;(\\d+))',
-    'g'
-  );
+  function closeQR() {
+    if (!qrBox) return;
+    var form = getSharedForm();
+    var topSlot = document.querySelector('#top-reply-form details');
 
-  function linkifyQuotes() {
-    document.querySelectorAll('.post-body').forEach(function(el) {
-      el.innerHTML = el.innerHTML.replace(RE, function(_, g1, slug_n, n, g4, slug, g6, sn) {
-        if (g1) {
-          // >>>/{slug}/{N} — cross-board with post number
-          return '<a class="post-quote-link cross-board"' +
-                 ' href="/board/' + slug_n + '/thread/0#post-' + n + '"' +
-                 ' data-xboard="' + slug_n + '"' +
-                 ' data-target="' + n + '"' +
-                 '>&gt;&gt;&gt;/' + slug_n + '/' + n + '</a>';
-        }
-        if (g4) {
-          // >>>/{slug}/ — cross-board, board only
-          return '<a class="post-quote-link cross-board"' +
-                 ' href="/board/' + slug + '"' +
-                 '>&gt;&gt;&gt;/' + slug + '/</a>';
-        }
-        // >>{N} — same thread
-        return '<a class="post-quote-link"' +
-               ' href="#post-' + sn + '"' +
-               ' data-target="' + sn + '"' +
-               '>&gt;&gt;' + sn + '</a>';
+    // Move form back to the top position.
+    if (form && topSlot) {
+      topSlot.appendChild(form);
+      form.classList.remove('in-qr');
+    }
+
+    qrBox.style.display = 'none';
+    qrOpen = false;
+
+    // Re-expand the top form so the user can see their content.
+    if (topSlot) topSlot.setAttribute('open', '');
+    // Scroll to top form and focus the textarea.
+    var topForm = document.getElementById('top-reply-form');
+    if (topForm) topForm.scrollIntoView({behavior: 'smooth', block: 'start'});
+    var ta = document.getElementById('reply-body');
+    if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; }
+  }
+
+  // Bind directly to each No.{N} anchor — no delegation, no bubbling confusion.
+  // Called once after DOM is ready (inside init()) and again after any dynamic
+  // content is added (currently none, but safe to re-call).
+  function bindPostNumbers() {
+    document.querySelectorAll('a.post-number').forEach(function(a) {
+      // Skip anchors inside the hover-preview popup or the QR shell.
+      if (a.closest('.quote-preview') || a.closest('#quick-reply')) return;
+      // Avoid double-binding if called multiple times.
+      if (a.dataset.qrBound) return;
+      a.dataset.qrBound = '1';
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openQR(a.dataset.postNumber);
       });
     });
-    // Run (You) marking after linkification so the quote links exist
+  }
+
+  /* ── Image links — always open full image in a new tab ───────────────── */
+  // Intercept clicks on the image anchor so they never accidentally trigger
+  // the quote handler above (even via ancestor traversal in older browsers).
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a.image-link');
+    if (!link) return;
+    e.preventDefault();
+    window.open(link.href, '_blank', 'noopener');
+  });
+
+  // Post body formatting and quote linkification delegate to global
+  // window.rbFormatPostBody defined in base.html — shared across all pages.
+  function linkifyQuotes() {
+    document.querySelectorAll('.post-body').forEach(function(el) {
+      el.innerHTML = window.rbFormatPostBody(el.innerHTML);
+    });
     markYouPosts();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', linkifyQuotes);
-  } else {
-    linkifyQuotes();
-  }
-
+    /* ── Hover preview popup ───────────────────────────────────────── */
   /* ── Hover preview popup ─────────────────────────────────────────────── */
   var popup = null;
-  var xboardCache = {};
   function getPopup() {
     if (popup) return popup;
     popup = document.createElement('div');
@@ -404,14 +478,9 @@
     if (!link) return;
     var p = getPopup();
     if (link.dataset.xboard) {
-      var slug = link.dataset.xboard;
-      var n    = link.dataset.target;
-      var key  = slug + '/' + n;
-      var html = xboardCache[key] ||
-        '<div style="padding:.4rem"><strong>&gt;&gt;&gt;/' + slug + '/' + n + '</strong><br>' +
-        '<a href="/board/' + slug + '#post-' + n + '">Jump to post on /' + slug + '/ →</a></div>';
-      xboardCache[key] = html;
-      p.innerHTML = html;
+      p.innerHTML = '<div style="padding:.4rem"><strong>&gt;&gt;&gt;/' + link.dataset.xboard + '/' +
+        (link.dataset.target||'') + '</strong><br>' +
+        '<a href="/board/' + link.dataset.xboard + '/post/' + link.dataset.target + '">Jump to post →</a></div>';
       p.style.display = 'block';
       return;
     }
@@ -426,8 +495,7 @@
     var x = e.clientX + 16, y = e.clientY + 8;
     if (x + 440 > window.innerWidth)  x = e.clientX - 456;
     if (y + 200 > window.innerHeight) y = e.clientY - 216;
-    popup.style.left = x + 'px';
-    popup.style.top  = y + 'px';
+    popup.style.left = x + 'px'; popup.style.top = y + 'px';
   });
   document.addEventListener('mouseout', function(e) {
     if (e.target.closest('.post-quote-link') && popup) popup.style.display = 'none';
@@ -453,9 +521,7 @@
       '</div>';
     document.body.appendChild(m);
     flagModal = m;
-    document.getElementById('flag-close').addEventListener('click', function() {
-      m.style.display = 'none';
-    });
+    document.getElementById('flag-close').addEventListener('click', function() { m.style.display = 'none'; });
     return m;
   }
   document.addEventListener('click', function(e) {
@@ -471,8 +537,7 @@
     var reason = document.getElementById('flag-reason').value.trim();
     var status = document.getElementById('flag-status');
     if (!reason) { status.textContent = 'Enter a reason.'; return; }
-    var btn = e.target;
-    btn.disabled = true; status.textContent = 'Submitting...';
+    var btn = e.target; btn.disabled = true; status.textContent = 'Submitting...';
     fetch('/board/' + flagBoard + '/thread/' + flagThread + '/flag', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({reason: reason})
@@ -486,8 +551,92 @@
     }).catch(function() { status.textContent = 'Network error.'; btn.disabled = false; });
   });
 
+  /* ── Auto-update (exponential back-off) ─────────────────────────────── */
+  var AUTO_KEY = 'thread-count:' + THREAD_ID;
+  var autoTimer = null;
+  var autoInterval = 10000;   // start at 10s
+  var MAX_AUTO_INTERVAL = 300000; // cap at 5 min
+  var currentPostCount = document.querySelectorAll('.post').length;
+
+  // Compare with stored count from last reload to set initial interval
+  var storedCount = parseInt(sessionStorage.getItem(AUTO_KEY) || '0', 10);
+  if (storedCount > 0 && currentPostCount <= storedCount) {
+    autoInterval = Math.min(autoInterval * 2, MAX_AUTO_INTERVAL);
+  } else {
+    autoInterval = 10000;
+  }
+  sessionStorage.setItem(AUTO_KEY, String(currentPostCount));
+
+  function scheduleAutoUpdate() {
+    clearTimeout(autoTimer);
+    var statusEl = document.getElementById('rb-auto-status');
+    var secs = Math.round(autoInterval / 1000);
+    if (statusEl) statusEl.textContent = 'Next check in ' + secs + 's';
+    autoTimer = setTimeout(function() {
+      // Do not reload if the user is actively typing in any reply form.
+      // The shared form has a single textarea #reply-body wherever it lives.
+      var ta = document.getElementById('reply-body');
+      var hasContent = (ta && ta.value.trim().length > 0);
+      // Also check name/email fields in case user is mid-fill.
+      var nameEl  = document.getElementById('reply-name');
+      var emailEl = document.getElementById('reply-email');
+      if (!hasContent && nameEl  && nameEl.value.trim().length > 0)  hasContent = true;
+      if (!hasContent && emailEl && emailEl.value.trim().length > 0) hasContent = true;
+
+      if (hasContent) {
+        // User is typing — defer by 15s and keep status visible.
+        if (statusEl) statusEl.textContent = 'Paused (typing…)';
+        autoInterval = 15000;
+        scheduleAutoUpdate();
+        return;
+      }
+      if (statusEl) statusEl.textContent = 'Checking…';
+      window.location.reload();
+    }, autoInterval);
+  }
+
+  var autoChk = document.getElementById('rb-auto-update');
+  var AUTO_PREF_KEY = 'rb:auto-update';
+  if (autoChk) {
+    // Persist preference
+    autoChk.checked = sessionStorage.getItem(AUTO_PREF_KEY) === '1';
+    autoChk.addEventListener('change', function() {
+      sessionStorage.setItem(AUTO_PREF_KEY, autoChk.checked ? '1' : '0');
+      if (autoChk.checked) {
+        scheduleAutoUpdate();
+      } else {
+        clearTimeout(autoTimer);
+        var statusEl = document.getElementById('rb-auto-status');
+        if (statusEl) statusEl.textContent = '';
+      }
+    });
+    // Auto-restart if it was on before reload
+    if (autoChk.checked) scheduleAutoUpdate();
+  }
+
+  /* ── Run on DOM ready ─────────────────────────────────────────────────── */
+  function init() {
+    // base.html already ran formatPostBody on .post-body elements and timestamps.
+    // Re-run linkifyQuotes here so markYouPosts() fires after formatting.
+    linkifyQuotes();
+    bindPostNumbers();   // attach No.{N} click handlers directly to each anchor
+    // Bottom-nav [Reply] link: if QR is open, close it (returning to top);
+    // otherwise just scroll to the top form (default anchor behaviour).
+    var replyLink = document.querySelector('.thread-bottom-nav a[href="#top-reply-form"]');
+    if (replyLink) {
+      replyLink.addEventListener('click', function(e) {
+        if (qrOpen) { e.preventDefault(); closeQR(); }
+      });
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
   /* ── Moderation toolbar ──────────────────────────────────────────────── */
-  if (!IS_MOD) return; // rest of code is mod-only
+  if (!IS_MOD) return;
 
   var banModal  = document.getElementById('ban-modal');
   var banCancel = document.getElementById('ban-cancel');
@@ -503,7 +652,6 @@
   if (banCancel) banCancel.addEventListener('click', closeBanModal);
   if (banClose)  banClose.addEventListener('click', closeBanModal);
 
-  // mod action dispatch
   document.addEventListener('click', function(e) {
     var btn = e.target.closest('.mod-btn');
     if (!btn) return;
@@ -516,62 +664,42 @@
     var action   = btn.dataset.action;
 
     if (action === 'D') {
-      var msg = isOp
-        ? 'Delete this post? (This is the OP — the whole thread will be deleted.)'
-        : 'Delete this post?';
-      if (!confirm(msg)) return;
-      modFetch('POST', '/mod/posts/' + postId + '/delete', null, 'Post deleted.', function() {
+      if (!confirm(isOp ? 'Delete this OP? (whole thread will be deleted.)' : 'Delete this post?')) return;
+      modFetch('POST', '/mod/posts/' + postId + '/delete', null, function() {
         if (isOp) window.location.href = '/board/' + BOARD_SLUG;
         else window.location.reload();
       });
-
     } else if (action === 'D*') {
-      var msg2 = isOp
-        ? 'Delete ALL posts by this IP in this thread? (Includes OP — thread will be deleted.)'
-        : 'Delete ALL posts by this IP in this thread?';
-      if (!confirm(msg2)) return;
-      modFetch('POST', '/mod/threads/' + threadId + '/delete-by-ip',
-               { ip_hash: ipHash }, 'Posts deleted.', function(data) {
+      if (!confirm('Delete ALL posts by this IP in this thread?')) return;
+      modFetch('POST', '/mod/threads/' + threadId + '/delete-by-ip', { ip_hash: ipHash }, function(data) {
         window.rbToast.ok('Deleted ' + (data.deleted || 0) + ' post(s).');
         setTimeout(function() { window.location.reload(); }, 1200);
       });
-
     } else if (action === 'B') {
       openBanModal(ipHash, postId, threadId, false, false);
-
     } else if (action === 'BD') {
       openBanModal(ipHash, postId, threadId, true, false);
-
     } else if (action === 'BD*') {
       openBanModal(ipHash, postId, threadId, true, true);
-
     } else if (action === 'S') {
-      var nowSticky = THREAD_STICKY;
-      var want = !nowSticky;
-      var label = want ? 'sticky' : 'un-sticky';
+      var want = !THREAD_STICKY;
       if (!confirm((want ? 'Sticky' : 'Un-sticky') + ' this thread?')) return;
-      modFetch('POST', '/mod/threads/' + threadId + '/sticky',
-               { value: want }, 'Thread ' + label + '.', function() {
+      modFetch('POST', '/mod/threads/' + threadId + '/sticky', { value: want }, function() {
         THREAD_STICKY = want;
-        // Update all S buttons
         document.querySelectorAll('.mod-btn[data-action="S"]').forEach(function(b) {
           b.textContent = want ? '[S-]' : '[S+]';
         });
-        window.rbToast.ok('Thread ' + label + '.');
+        window.rbToast.ok('Thread ' + (want ? 'stickied' : 'un-stickied') + '.');
       });
-
     } else if (action === 'C') {
-      var nowClosed = THREAD_CLOSED;
-      var wantClose = !nowClosed;
-      var clabel = wantClose ? 'close' : 're-open';
+      var wantClose = !THREAD_CLOSED;
       if (!confirm((wantClose ? 'Close' : 'Re-open') + ' this thread?')) return;
-      modFetch('POST', '/mod/threads/' + threadId + '/close',
-               { value: wantClosed }, 'Thread ' + clabel + 'd.', function() {
+      modFetch('POST', '/mod/threads/' + threadId + '/close', { value: wantClose }, function() {
         THREAD_CLOSED = wantClose;
         document.querySelectorAll('.mod-btn[data-action="C"]').forEach(function(b) {
           b.textContent = wantClose ? '[C-]' : '[C+]';
         });
-        window.rbToast.ok('Thread ' + clabel + 'd.');
+        window.rbToast.ok('Thread ' + (wantClose ? 'closed' : 're-opened') + '.');
       });
     }
   });
@@ -584,61 +712,50 @@
     document.getElementById('ban-delete-all').value  = deleteAll  ? '1' : '0';
     var chk = document.getElementById('ban-delete-check');
     chk.checked  = alsoDelete || deleteAll;
-    chk.disabled = alsoDelete || deleteAll; // pre-set from action, still toggleable for plain B
+    chk.disabled = alsoDelete || deleteAll;
     document.getElementById('ban-modal').classList.add('open');
     document.getElementById('ban-reason').focus();
   }
 
   if (banSubmit) banSubmit.addEventListener('click', function() {
-    var ipHash   = document.getElementById('ban-ip-hash').value;
-    var postId   = document.getElementById('ban-post-id').value;
-    var threadId = document.getElementById('ban-thread-id').value;
+    var ipHash     = document.getElementById('ban-ip-hash').value;
+    var postId     = document.getElementById('ban-post-id').value;
+    var threadId   = document.getElementById('ban-thread-id').value;
     var alsoDelete = document.getElementById('ban-also-delete').value === '1'
                   || document.getElementById('ban-delete-check').checked;
     var deleteAll  = document.getElementById('ban-delete-all').value === '1';
-    var reason   = document.getElementById('ban-reason').value.trim();
-    var duration = document.getElementById('ban-duration').value;
-    var status   = document.getElementById('ban-status');
-
+    var reason     = document.getElementById('ban-reason').value.trim();
+    var duration   = document.getElementById('ban-duration').value;
+    var status     = document.getElementById('ban-status');
     if (!reason) { status.textContent = 'Enter a reason.'; return; }
-    banSubmit.disabled = true;
-    status.textContent = 'Banning…';
-
+    banSubmit.disabled = true; status.textContent = 'Banning…';
     var expiresAt = null;
     if (duration) {
       var ms = { '1h': 3600000, '24h': 86400000, '3d': 259200000, '7d': 604800000, '30d': 2592000000 }[duration];
       expiresAt = new Date(Date.now() + ms).toISOString();
     }
-
-    modFetch('POST', '/mod/bans', { ip_hash: ipHash, reason: reason, expires_at: expiresAt },
-      'IP banned.', function() {
-        // After banning, optionally delete
-        if (deleteAll) {
-          modFetch('POST', '/mod/threads/' + threadId + '/delete-by-ip',
-                   { ip_hash: ipHash }, '', function(d) {
-            closeBanModal();
-            window.rbToast.ok('Banned + deleted ' + (d.deleted || 0) + ' post(s).');
-            setTimeout(function() { window.location.reload(); }, 1200);
-          });
-        } else if (alsoDelete) {
-          modFetch('POST', '/mod/posts/' + postId + '/delete', null, '', function() {
-            closeBanModal();
-            window.rbToast.ok('Banned + post deleted.');
-            setTimeout(function() { window.location.reload(); }, 1200);
-          });
-        } else {
+    modFetch('POST', '/mod/bans', { ip_hash: ipHash, reason: reason, expires_at: expiresAt }, function() {
+      if (deleteAll) {
+        modFetch('POST', '/mod/threads/' + threadId + '/delete-by-ip', { ip_hash: ipHash }, function(d) {
           closeBanModal();
-          window.rbToast.ok('IP banned.');
-        }
-      });
+          window.rbToast.ok('Banned + deleted ' + (d.deleted || 0) + ' post(s).');
+          setTimeout(function() { window.location.reload(); }, 1200);
+        });
+      } else if (alsoDelete) {
+        modFetch('POST', '/mod/posts/' + postId + '/delete', null, function() {
+          closeBanModal();
+          window.rbToast.ok('Banned + post deleted.');
+          setTimeout(function() { window.location.reload(); }, 1200);
+        });
+      } else {
+        closeBanModal();
+        window.rbToast.ok('IP banned.');
+      }
+    });
   });
 
-  function modFetch(method, url, body, _successMsg, onSuccess) {
-    var opts = {
-      method: method,
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-    };
+  function modFetch(method, url, body, onSuccess) {
+    var opts = { method: method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
     fetch(url, opts)
       .then(function(r) {

@@ -203,6 +203,19 @@ impl<UR: UserRepository, AP: AuthProvider> UserService<UR, AP> {
         Ok(())
     }
 
+    /// Fetch a single user by ID.
+    ///
+    /// Used by handlers that need the full `User` record (e.g. to display `created_at`).
+    /// Returns `UserError::NotFound` if the user does not exist.
+    pub async fn get_user(&self, user_id: UserId) -> Result<User, UserError> {
+        self.user_repo.find_by_id(user_id).await.map_err(|e| match e {
+            DomainError::NotFound { .. } => UserError::NotFound {
+                id: user_id.to_string(),
+            },
+            other => UserError::Internal(other),
+        })
+    }
+
     /// Paginated list of all user accounts.
     pub async fn list_users(
         &self,

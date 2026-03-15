@@ -69,6 +69,8 @@ impl PostRepository for NoOpPostRepo {
         _: &str,
         _: Page,
     ) -> Result<Paginated<Post>, DomainError> { unimplemented!() }
+    async fn find_all_by_thread(&self, _: ThreadId) -> Result<Vec<Post>, DomainError> { Ok(vec![]) }
+    async fn find_thread_id_by_post_number(&self, _: BoardId, _: u64) -> Result<Option<ThreadId>, DomainError> { Ok(None) }
 }
 
 struct NoOpBanRepo;

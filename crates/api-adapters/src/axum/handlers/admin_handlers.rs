@@ -206,3 +206,61 @@ where
         Paginated::new(vec![], 0, Page::new(1), 15);
     Ok(Json(empty.into()))
 }
+
+// ─── Staff Request Approve / Deny ─────────────────────────────────────────────
+
+/// Request body for `POST /admin/requests/{id}/deny`.
+#[derive(Debug, serde::Deserialize)]
+pub struct DenyRequestBody {
+    /// Optional reviewer note shown to the requester.
+    pub note: Option<String>,
+}
+
+/// `POST /admin/requests/{id}/approve` — approve a pending staff request.
+///
+/// Permission is enforced by `StaffRequestService::assert_can_review`:
+/// - Admin: can approve any request type.
+/// - BoardOwner: can approve `become_volunteer` requests targeting their boards.
+/// - All others: 403 Forbidden.
+///
+/// Shared by both the admin router and the board-owner router; the same route
+/// path is used so the dashboard JS does not need to know the caller's role.
+pub async fn approve_request<RR, UR>(
+    State(request_svc): State<Arc<StaffRequestService<RR, UR>>>,
+    crate::axum::middleware::auth::AnyModerationUser(reviewer): crate::axum::middleware::auth::AnyModerationUser,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<axum::http::StatusCode, ApiError>
+where
+    RR: domains::ports::StaffRequestRepository,
+    UR: domains::ports::UserRepository,
+{
+    let request_id = domains::models::StaffRequestId(id);
+    request_svc
+        .approve(request_id, &reviewer, None)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+/// `POST /admin/requests/{id}/deny` — deny a pending staff request.
+///
+/// Same permission rules as `approve_request`. Accepts an optional JSON body
+/// `{ "note": "reason" }` which is stored as the review note.
+pub async fn deny_request<RR, UR>(
+    State(request_svc): State<Arc<StaffRequestService<RR, UR>>>,
+    crate::axum::middleware::auth::AnyModerationUser(reviewer): crate::axum::middleware::auth::AnyModerationUser,
+    Path(id): Path<uuid::Uuid>,
+    body: Option<Json<DenyRequestBody>>,
+) -> Result<axum::http::StatusCode, ApiError>
+where
+    RR: domains::ports::StaffRequestRepository,
+    UR: domains::ports::UserRepository,
+{
+    let request_id = domains::models::StaffRequestId(id);
+    let note = body.and_then(|b| b.note.clone());
+    request_svc
+        .deny(request_id, &reviewer, note)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}

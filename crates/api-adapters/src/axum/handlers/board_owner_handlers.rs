@@ -135,7 +135,36 @@ where
         role_display:     current.role_display(),
         announcements:    vec![],
         boards,
-        staff:            Some(vec![]), // TODO v1.1: load volunteers via UserRepository
+        staff:            {
+            // Load volunteers for all owned boards in one pass.
+            // list_volunteers returns (UserId, username, assigned_at) — we build
+            // lightweight DashboardUser entries without an extra user DB lookup.
+            let mut vol_users = Vec::new();
+            for board_id in &current.owned_boards {
+                let vols = s.board_svc
+                    .list_volunteers(*board_id)
+                    .await
+                    .unwrap_or_default();
+                for (user_id, username, _assigned_at) in vols {
+                    // Avoid duplicates when a volunteer covers multiple owned boards.
+                    if !vol_users.iter().any(|u: &crate::axum::templates::DashboardUser| u.user.id == user_id) {
+                        vol_users.push(crate::axum::templates::DashboardUser {
+                            user: domains::models::User {
+                                id:            user_id,
+                                username,
+                                password_hash: domains::models::PasswordHash("".into()), // sentinel — hash is never read by the dashboard template
+                                role:          domains::models::Role::BoardVolunteer,
+                                is_active:     true,
+                                created_at:    chrono::Utc::now(),
+                            },
+                            can_message:    true,
+                            can_deactivate: false,
+                        });
+                    }
+                }
+            }
+            Some(vol_users)
+        },
         recent_logs:      vec![],
         recent_posts:     vec![],
         messages:         vec![],

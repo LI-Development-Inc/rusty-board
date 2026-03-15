@@ -234,15 +234,24 @@ img {
 }
 
 .post-tripcode {
-  font-family: var(--font-mono);
-  font-size: 0.8em;
-  color: #888;
-  letter-spacing: 0.03em;
+  font-family: var(--font-sans);
+  font-size: 0.88em;
+  font-weight: normal;
+  color: #8a6a00;          /* dark amber — clearly differs from the name green */
+  letter-spacing: 0.01em;
 }
 
-/* !! secure tripcodes get slightly stronger emphasis */
+/* Secure tripcode (!!) — blue to signal cryptographic trust */
 .post-tripcode[data-level="secure"] {
-  color: #666;
+  color: #0055aa;
+  font-weight: 600;
+}
+
+/* Super tripcode (!!!) — orange-red; rendered as stub, rare/special */
+.post-tripcode[data-level="super"] {
+  color: #cc4400;
+  font-weight: 700;
+  font-style: italic;
 }
 
 /* ── Capcodes ─────────────────────────────────────────────────────────────── */
@@ -330,8 +339,78 @@ img {
   font-size: 0.9rem;
 }
 
+/* ── Post body text formatting ─────────────────────────────────────────────── */
+
 .post-body .greentext {
-  color: var(--color-quote);
+  color: var(--color-quote, #789922);
+}
+
+.post-body .pinktext {
+  color: #cc5577;
+}
+
+.post-body .redtext {
+  color: #cc0000;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.post-body .bluetext {
+  color: #0055cc;
+}
+
+/* Spoiler: hidden until hovered/tapped */
+.post-body .spoiler {
+  background: #222;
+  color: #222;
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.post-body .spoiler:hover,
+.post-body .spoiler:focus {
+  color: #fff;
+}
+
+/* Inline code */
+.post-body code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: rgba(0,0,0,0.07);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 3px;
+  padding: 0 3px;
+  white-space: pre;
+}
+
+/* Fenced code block  ```\n...\n``` */
+pre.code-block {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-left: 3px solid var(--color-border, #c8b88a);
+  border-radius: 3px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.3rem 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+pre.code-block code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .post-body .pinktext  { color: #ff88aa; }
+  .post-body .redtext   { color: #ff5555; }
+  .post-body .bluetext  { color: #5599ff; }
+  .post-body code       { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
+  .post-body .spoiler   { background: #ccc; color: #ccc; }
+  .post-body .spoiler:hover { color: #111; }
 }
 
 .post-body .quote-link {
@@ -515,6 +594,31 @@ img {
   position: relative;
   color: var(--color-text);
   margin: 0.4rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* OP thumbnail on board index */
+.op-thumb-wrap {
+  float: left;
+  margin: 0 0.75rem 0.5rem 0;
+  line-height: 0;
+}
+.op-thumb {
+  max-width: 150px;
+  max-height: 150px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  display: block;
+}
+.thread-op::after {
+  content: "";
+  display: table;
+  clear: both;
 }
 
 .thread-footer {
@@ -568,6 +672,21 @@ img {
   margin-top: 1.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Auto-update label sits inline in the bottom nav */
+.auto-update-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85em;
+  cursor: pointer;
+  color: var(--color-muted);
+  user-select: none;
 }
 
 /* ── Login form ─────────────────────────────────────────────────────────────── */

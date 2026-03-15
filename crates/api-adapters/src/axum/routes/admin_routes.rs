@@ -29,7 +29,7 @@ where
     let dashboard_state = AdminDashboardState {
         user_svc:    user_service.clone(),
         board_svc:   board_service,
-        request_svc: request_service,
+        request_svc: request_service.clone(),
     };
 
     Router::new()
@@ -38,6 +38,18 @@ where
             "/admin/dashboard",
             get(admin_handlers::admin_dashboard::<UR, AP, BR, RR>)
                 .with_state(dashboard_state),
+        )
+        // Staff request review — board owners use the same paths; the service
+        // enforces per-role permission inside approve() / deny().
+        .route(
+            "/admin/requests/{id}/approve",
+            post(admin_handlers::approve_request::<RR, UR>)
+                .with_state(request_service.clone()),
+        )
+        .route(
+            "/admin/requests/{id}/deny",
+            post(admin_handlers::deny_request::<RR, UR>)
+                .with_state(request_service),
         )
         // User management (user service only)
         .route(
