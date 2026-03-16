@@ -1,9 +1,9 @@
 //! Authentication handlers: `POST /auth/login`, `POST /auth/refresh`, `GET /auth/logout`.
 
-use axum::{extract::State, http::header, response::IntoResponse, Json};
+use axum::{extract::{Extension, State}, http::header, response::IntoResponse, Json};
 use std::sync::Arc;
 
-use crate::axum::middleware::auth::AuthenticatedUser;
+use crate::axum::middleware::{auth::AuthenticatedUser, login_guard::LoginGuard};
 use crate::common::{
     dtos::{LoginRequest, LoginResponse, RegisterRequest},
     errors::ApiError,
@@ -15,40 +15,43 @@ use services::user::UserService;
 ///
 /// Accepts `Content-Type: application/json` with `{ "username": "...", "password": "..." }`.
 /// On success: returns `200` with a `LoginResponse` body **and** sets the `token` cookie.
-/// On failure: returns `401`.
+/// On failure: returns `401`. After 5 consecutive failures the account is locked for 10 min.
 ///
 /// The cookie approach lets browser-based sessions work without JavaScript
 /// needing to manually attach `Authorization` headers on every navigation.
 pub async fn login<UR, AP>(
     State(user_service): State<Arc<UserService<UR, AP>>>,
+    Extension(guard): Extension<LoginGuard>,
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError>
 where
     UR: domains::ports::UserRepository,
     AP: AuthProvider,
 {
-    let (token, claims) = user_service
-        .login(&req.username, &req.password)
-        .await
-        .map_err(ApiError::from)?;
+    // Reject immediately if the account is locked out.
+    if let Err(secs) = guard.check(&req.username) {
+        return Err(ApiError::RateLimited { retry_after_secs: secs as u32 });
+    }
 
-    // TTL in seconds for the Max-Age directive (same as JWT expiry).
-    let ttl_secs = claims.exp - chrono::Utc::now().timestamp();
-    let cookie = format!(
-        "token={}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}",
-        token.0,
-        ttl_secs.max(0),
-    );
-
-    let body = Json(LoginResponse {
-        token:      token.0,
-        expires_at: claims.exp,
-    });
-
-    Ok((
-        [(header::SET_COOKIE, cookie)],
-        body,
-    ))
+    match user_service.login(&req.username, &req.password).await {
+        Ok((token, claims)) => {
+            guard.record_success(&req.username);
+            let ttl_secs = claims.exp - chrono::Utc::now().timestamp();
+            let cookie = format!(
+                "token={}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}",
+                token.0,
+                ttl_secs.max(0),
+            );
+            Ok((
+                [(header::SET_COOKIE, cookie)],
+                Json(LoginResponse { token: token.0, expires_at: claims.exp }),
+            ).into_response())
+        }
+        Err(e) => {
+            guard.record_failure(&req.username);
+            Err(ApiError::from(e))
+        }
+    }
 }
 
 /// `POST /auth/refresh` — accept a still-valid token and return a refreshed one.

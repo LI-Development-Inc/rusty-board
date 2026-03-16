@@ -12,6 +12,7 @@ media-local = []
 video       = ["ffmpeg-next"]
 documents   = ["pdfium-render"]
 redis       = ["deadpool-redis"]
+spam-dnsbl  = []           # DNS Block List IP checking via Spamhaus ZEN
 
 [dependencies]
 domains     = { path = "../domains" }

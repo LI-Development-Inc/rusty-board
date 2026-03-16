@@ -23,6 +23,7 @@ crates/configs           — Settings struct (infrastructure configuration only)
 3. EXIF stripping is **unconditional** — not a toggle
 4. Active ban check always runs — not a `BoardConfig` toggle
 5. Audit log write failures **never propagate** to the caller
+8. Posting remains **100% anonymous** regardless of staff login status
 6. Raw IP addresses are **never stored** — only `SHA-256(ip + daily_salt)`
 7. `#[cfg(feature)]` branches appear **only** in `composition.rs`
 
@@ -65,6 +66,8 @@ The application will be available at `http://localhost:8080`.
 | `redis` | Redis rate limiter (default) |
 | `video` | Video keyframe extraction via ffmpeg |
 | `documents` | PDF first-page rendering via pdfium |
+| `auth-tripcode` | Tripcode + capcode name-field parsing (enabled by default) |
+| `spam-dnsbl` | DNS Block List checking on post submission |
 
 ## Development
 
@@ -111,12 +114,12 @@ Public endpoints require no authentication. Moderator/admin endpoints require a 
 
 All configuration is via environment variables. See `.env.example` for the full documented list.
 
-Per-board behavioural configuration (bump limits, rate limits, spam filters, etc.) lives in `board_configs` in the database and is managed through the dashboard at `/board/:slug/config`. This is intentionally separate from infrastructure `Settings`.
+Per-board behavioural configuration (bump limits, max threads, rate limits, spam filters, etc.) lives in `board_configs` in the database and is managed through the dashboard at `/board/:slug/config`. This is intentionally separate from infrastructure `Settings`.
 
 ## Security
 
 - Argon2id password hashing (OWASP recommended parameters: m=19456, t=2, p=1)
-- JWT HS256 tokens; stateless (v1.1+ will add revocable cookie sessions)
+- JWT HS256 tokens or revocable cookie sessions (`auth-cookie` feature, v1.1)
 - EXIF metadata stripped from all uploaded images unconditionally
 - Raw IP addresses never stored (SHA-256 with rotating daily salt)
 - All secrets via environment variables only; `secrecy::Secret<String>` prevents accidental logging

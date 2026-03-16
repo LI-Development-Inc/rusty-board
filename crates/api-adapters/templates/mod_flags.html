@@ -53,6 +53,7 @@ function resolveFlag(id, resolution, btn) {
   btn.disabled = true;
   fetch('/mod/flags/' + id + '/resolve', {
     method: 'POST',
+    credentials: 'same-origin',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({resolution: resolution})
   }).then(function(r) {

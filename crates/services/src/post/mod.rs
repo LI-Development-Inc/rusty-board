@@ -46,6 +46,10 @@ pub struct PostDraft {
     pub body: String,
     /// The poster's hashed IP address.
     pub ip_hash: IpHash,
+    /// The raw (unhashed) poster IP, used only for DNSBL checking.
+    /// Never stored — lives only in memory for the duration of the request.
+    /// `None` when the IP is unavailable (IPv6, tests, reverse-proxy without forwarding).
+    pub raw_ip: Option<String>,
     /// The poster's display name. `None` for anonymous.
     pub name: Option<String>,
     /// The email field. `Some("sage")` prevents thread bump.
@@ -92,6 +96,10 @@ where
     media_processor:  MP,
     /// Server-side secret used for `##` secure tripcodes. Empty = no pepper.
     tripcode_pepper:  String,
+    /// Optional DNSBL checker. `None` = DNSBL disabled (fail-open by design).
+    dnsbl:            Option<std::sync::Arc<dyn domains::ports::DnsblChecker>>,
+    /// Optional archive store for board-capacity pruning when `archive_enabled = true`.
+    archive_repo:     Option<std::sync::Arc<dyn domains::ports::ArchiveRepository>>,
 }
 
 impl<PR, TR, BR, MS, RL, MP> PostService<PR, TR, BR, MS, RL, MP>
@@ -125,7 +133,32 @@ where
             rate_limiter,
             media_processor,
             tripcode_pepper,
+            dnsbl: None,
+            archive_repo: None,
         }
+    }
+
+    /// Attach a `DnsblChecker` to this service.
+    ///
+    /// When set, `create_post` checks the poster's raw IP (if available)
+    /// against the DNSBL before accepting the post. The check is fail-open:
+    /// a DNS error or timeout never blocks posting.
+    pub fn with_dnsbl(
+        mut self,
+        checker: std::sync::Arc<dyn domains::ports::DnsblChecker>,
+    ) -> Self {
+        self.dnsbl = Some(checker);
+        self
+    }
+
+    /// Attach an `ArchiveRepository` so board-capacity pruning archives threads
+    /// instead of hard-deleting them when `board_config.archive_enabled = true`.
+    pub fn with_archive_repo(
+        mut self,
+        archive: std::sync::Arc<dyn domains::ports::ArchiveRepository>,
+    ) -> Self {
+        self.archive_repo = Some(archive);
+        self
     }
 
     /// Create a new post (and optionally a new thread if no `thread_id` is provided).
@@ -180,6 +213,36 @@ where
                 reason:     ban.reason.clone(),
                 expires_at: ban.expires_at,
             });
+        }
+
+        // ── Step 1b: DNSBL check ──────────────────────────────────────────────
+        // Gated by BoardConfig + presence of a DnsblChecker. Fail-open: a DNS
+        // error or timeout is logged and treated as "not listed".
+        if board_config.spam_filter_enabled {
+            if let Some(ref checker) = self.dnsbl {
+                // draft.ip_hash is the hashed IP; the raw IP for DNSBL is in draft.raw_ip.
+                // Only check if the raw IP is available (not proxied/unknown).
+                if let Some(ref raw_ip) = draft.raw_ip {
+                    match checker.is_blocked(raw_ip).await {
+                        Ok(true) => {
+                            tracing::warn!(
+                                ip_hash = %draft.ip_hash.0,
+                                "DNSBL blocked post attempt"
+                            );
+                            return Err(PostError::Banned {
+                                reason: "Your IP address is listed in a spam blocklist. \
+                                         Contact your ISP or use a clean connection.".to_owned(),
+                                expires_at: None,
+                            });
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            // Fail open — log but do not block.
+                            tracing::warn!(error = %e, "DNSBL lookup failed (fail-open)");
+                        }
+                    }
+                }
+            }
         }
 
         // ── Step 2: Rate limit check ─────────────────────────────────────────
@@ -315,6 +378,7 @@ where
                     bumped_at:   now,
                     sticky:      false,
                     closed:      false,
+                    cycle:       false,
                     created_at:  now,
                 };
                 let thread_id = self.thread_repo.save(&thread).await?;
@@ -347,33 +411,44 @@ where
             let processed = self.media_processor.process(raw_file).await.map_err(|e| {
                 PostError::MediaError { reason: e.to_string() }
             })?;
-            // Store original
-            self.media_storage
-                .store(
-                    &processed.original_key,
-                    processed.original_data.clone(),
-                    &mime_str,
-                )
+
+            // ── Deduplication: reuse existing storage keys for identical files ──
+            // If we already have an attachment with this SHA-256 hash, point the new
+            // attachment record at the existing storage objects instead of re-uploading.
+            let existing = self.post_repo
+                .find_attachment_by_hash(&processed.hash)
                 .await
-                .map_err(|e| PostError::MediaError { reason: e.to_string() })?;
-            // Store thumbnail if present
-            if let (Some(thumb_key), Some(thumb_data)) =
-                (&processed.thumbnail_key, &processed.thumbnail_data)
-            {
+                .unwrap_or(None);
+
+            let (media_key, thumbnail_key) = if let Some(ref dup) = existing {
+                (dup.media_key.clone(), dup.thumbnail_key.clone())
+            } else {
+                // Store original
                 self.media_storage
-                    .store(thumb_key, thumb_data.clone(), "image/png")
+                    .store(&processed.original_key, processed.original_data.clone(), &mime_str)
                     .await
                     .map_err(|e| PostError::MediaError { reason: e.to_string() })?;
-            }
+                // Store thumbnail if present
+                if let (Some(thumb_key), Some(thumb_data)) =
+                    (&processed.thumbnail_key, &processed.thumbnail_data)
+                {
+                    self.media_storage
+                        .store(thumb_key, thumb_data.clone(), "image/png")
+                        .await
+                        .map_err(|e| PostError::MediaError { reason: e.to_string() })?;
+                }
+                (processed.original_key, processed.thumbnail_key)
+            };
+
             attachments.push(Attachment {
                 id:            Uuid::new_v4(),
                 post_id:       PostId(Uuid::nil()), // filled in after post is saved
-                filename:      processed.original_key.0.clone(),
+                filename:      media_key.0.clone(),
                 mime:          mime_str,
                 hash:          processed.hash,
                 size_kb:       processed.size_kb,
-                media_key:     processed.original_key,
-                thumbnail_key: processed.thumbnail_key,
+                media_key,
+                thumbnail_key,
                 spoiler:       false,
             });
         }
@@ -381,31 +456,40 @@ where
         // ── Step 9: Apply forced_anon + tripcode/capcode parsing ─────────────
         // Parse the name field for `#` tripcode specifiers and `### Role` capcodes.
         // forced_anon strips both name and tripcode.
+        // When the `auth-tripcode` feature is disabled, the name is stored as-is
+        // and no tripcode or capcode processing occurs.
         let (name, tripcode) = if board_config.forced_anon {
             (None, None)
         } else {
-            use crate::common::tripcode::parse_name_field;
-            match draft.name.as_deref() {
-                None | Some("") => (None, None),
-                Some(raw_name) => {
-                    match parse_name_field(raw_name, draft.poster_role.as_ref(), &self.tripcode_pepper) {
-                        Ok(parsed) => (parsed.name, parsed.tripcode),
-                        Err(crate::common::tripcode::NameParseError::CapcodePermissionDenied { .. }) => {
-                            // Reject the post — impersonation attempt
-                            return Err(PostError::Validation {
-                                reason: "capcode permission denied: you do not have that staff role".to_owned(),
-                            });
-                        }
-                        Err(crate::common::tripcode::NameParseError::UnknownCapcodeRole { role }) => {
-                            return Err(PostError::Validation {
-                                reason: format!("unknown capcode role '{role}'"),
-                            });
+            #[cfg(feature = "auth-tripcode")]
+            let result = {
+                use crate::common::tripcode::parse_name_field;
+                match draft.name.as_deref() {
+                    None | Some("") => (None, None),
+                    Some(raw_name) => {
+                        match parse_name_field(raw_name, draft.poster_role.as_ref(), &self.tripcode_pepper) {
+                            Ok(parsed) => (parsed.name, parsed.tripcode),
+                            Err(crate::common::tripcode::NameParseError::CapcodePermissionDenied { .. }) => {
+                                return Err(PostError::Validation {
+                                    reason: "capcode permission denied: you do not have that staff role".to_owned(),
+                                });
+                            }
+                            Err(crate::common::tripcode::NameParseError::UnknownCapcodeRole { role }) => {
+                                return Err(PostError::Validation {
+                                    reason: format!("unknown capcode role '{role}'"),
+                                });
+                            }
                         }
                     }
                 }
-            }
+            };
+            #[cfg(not(feature = "auth-tripcode"))]
+            let result = match draft.name.as_deref() {
+                None | Some("") => (None, None),
+                Some(raw) => (Some(raw.to_owned()), None),
+            };
+            result
         };
-
         // ── Step 10: Insert post ──────────────────────────────────────────────
         let post = Post {
             id:          PostId(Uuid::new_v4()),
@@ -417,6 +501,7 @@ where
             email:       draft.email.clone(),
             created_at:  now_utc(),
             post_number: 0, // assigned atomically by the repository via board counter
+            pinned:      false,
         };
         let (post_id, post_number) = self.post_repo.save(&post).await?;
         let post = Post { id: post_id, post_number, ..post };
@@ -439,16 +524,45 @@ where
             self.thread_repo.bump(thread.id, now_utc()).await?;
         }
 
-        // TODO v1.2 — Cycle mode: when `thread.cycle == true` and `past_bump_limit`,
-        // instead of silently stopping bumps, prune the oldest post in the thread
-        // that is NOT pinned (`post.pinned == false`). This keeps cycle threads
-        // perpetually live. Implementation sketch:
-        //
-        //   if past_bump_limit && thread.cycle {
-        //       self.post_repo
-        //           .delete_oldest_unpinned(thread.id)
-        //           .await?;
-        //   }
+        // ── Step 11b: Cycle mode pruning ──────────────────────────────────────
+        // When the thread is in cycle mode and past the bump limit, delete the
+        // oldest non-OP unpinned reply so the thread stays perpetually live.
+        if past_bump_limit && thread.cycle {
+            if let Ok(Some(oldest_id)) = self.post_repo
+                .find_oldest_unpinned_reply(thread.id)
+                .await
+            {
+                // Best-effort: pruning failure never blocks the new post.
+                let _ = self.post_repo.delete_by_id(oldest_id).await;
+            }
+        }
+
+        // ── Step 11c: Board capacity prune ────────────────────────────────────
+        // After a new OP is posted, prune the oldest non-sticky thread when the
+        // board exceeds max_threads. When archive_enabled is true, candidates
+        // are copied to the archive store before deletion (best-effort).
+        if is_new_thread && board_config.max_threads > 0 {
+            let count = self.thread_repo.count_by_board(draft.board_id).await
+                .unwrap_or(0);
+            if count > board_config.max_threads {
+                if board_config.archive_enabled {
+                    if let Some(ref archive) = self.archive_repo {
+                        let excess = count - board_config.max_threads;
+                        if let Ok(oldest) = self.thread_repo
+                            .find_oldest_for_archive(draft.board_id, excess)
+                            .await
+                        {
+                            for t in &oldest {
+                                let _ = archive.archive_thread(t).await;
+                            }
+                        }
+                    }
+                }
+                let _ = self.thread_repo
+                    .prune_oldest(draft.board_id, board_config.max_threads)
+                    .await;
+            }
+        }
 
         // ── Step 12: Increment rate limit counter ─────────────────────────────
         if board_config.rate_limit_enabled && !draft.is_staff {
@@ -569,6 +683,7 @@ mod tests {
             thread_id,
             body: "Hello world".to_owned(),
             ip_hash: IpHash::new("abc123"),
+            raw_ip: None,
             name: None,
             email: None,
             files: vec![],
@@ -587,6 +702,7 @@ mod tests {
             bumped_at: Utc::now(),
             sticky: false,
             closed: false,
+            cycle:       false,
             created_at: Utc::now(),
         }
     }
@@ -715,6 +831,7 @@ mod tests {
                 bumped_at: Utc::now(),
                 sticky: false,
                 closed: true,  // CLOSED
+                cycle:       false,
                 created_at: Utc::now(),
             };
             Ok(t)
@@ -891,6 +1008,7 @@ mod tests {
                 bumped_at:  Utc::now(),
                 sticky:     false,
                 closed:     false,
+                cycle:       false,
                 created_at: Utc::now(),
             })
         });
@@ -938,6 +1056,7 @@ mod tests {
                 bumped_at:  Utc::now(),
                 sticky:     false,
                 closed:     false,
+                cycle:       false,
                 created_at: Utc::now(),
             })
         });
@@ -985,6 +1104,7 @@ mod tests {
                 bumped_at:   Utc::now(),
                 sticky:      false,
                 closed:      false,
+                cycle:       false,
                 created_at:  Utc::now(),
             })
         });

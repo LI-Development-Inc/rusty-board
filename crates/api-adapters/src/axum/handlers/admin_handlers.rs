@@ -264,3 +264,57 @@ where
         .map_err(ApiError::from)?;
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
+
+// ── Global broadcast announcement ─────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct BroadcastRequest {
+    pub body: String,
+}
+
+/// `POST /admin/announce` — send a staff message to every user account.
+///
+/// Iterates `UserRepository::find_all` pages and calls `StaffMessageService::send`
+/// for each user. Skips the sender's own account. Returns `{ "sent": N }`.
+///
+/// The message service is passed as a separate state via `Extension` because the
+/// admin route set uses `AdminDashboardState` as its primary state and axum does
+/// not support multiple `State` extractors of different types on the same route.
+pub async fn broadcast_announcement<UR, AP, BR, RR, MR>(
+    State(s): State<AdminDashboardState<UR, AP, BR, RR>>,
+    axum::extract::Extension(msg_svc): axum::extract::Extension<Arc<services::staff_message::StaffMessageService<MR>>>,
+    AdminUser(admin): AdminUser,
+    Json(req): Json<BroadcastRequest>,
+) -> Result<impl axum::response::IntoResponse, ApiError>
+where
+    UR: domains::ports::UserRepository,
+    AP: AuthProvider,
+    BR: services::board::BoardRepo,
+    RR: domains::ports::StaffRequestRepository,
+    MR: domains::ports::StaffMessageRepository + 'static,
+{
+    if req.body.trim().is_empty() {
+        return Err(ApiError::BadRequest("Announcement body cannot be empty".into()));
+    }
+
+    let mut page = 1u32;
+    let mut sent = 0u32;
+    loop {
+        let paginated = s.user_svc
+            .list_users(domains::models::Page::new(page))
+            .await
+            .map_err(ApiError::from)?;
+
+        for user in &paginated.items {
+            if user.id == admin.id { continue; } // skip self
+            // Best-effort: ignore per-send errors so one bad recipient doesn't abort.
+            let _ = msg_svc.send(&admin, user.id, req.body.clone()).await;
+            sent += 1;
+        }
+
+        if page >= paginated.total_pages() as u32 { break; }
+        page += 1;
+    }
+
+    Ok(Json(serde_json::json!({ "sent": sent })))
+}

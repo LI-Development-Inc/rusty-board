@@ -100,7 +100,16 @@ pub trait ThreadRepository: Send + Sync + 'static {
     async fn find_by_board(&self, board_id: BoardId, page: Page) -> Result<Paginated<Thread>, DomainError>;
 
     /// All threads for catalog view (no pagination; returns only OP post summary).
+    /// Catalog view — all threads for a board ordered by `sticky DESC, bumped_at DESC`.
+    ///
+    /// Returns `ThreadSummary` rows enriched with OP post header fields
+    /// (`op_name`, `op_tripcode`, `op_created_at`, `op_post_number`, `op_ip_hash`)
+    /// so the board index and catalog templates can render a full post header
+    /// without an additional per-thread query. Added v1.1-ux.
     async fn find_catalog(&self, board_id: BoardId) -> Result<Vec<ThreadSummary>, DomainError>;
+
+    /// Set cycle mode on a thread (v1.2). `true` = prune oldest unpinned reply on new post past bump limit.
+    async fn set_cycle(&self, id: ThreadId, cycle: bool) -> Result<(), DomainError>;
 
     /// Insert a new thread. Returns the assigned ThreadId.
     async fn save(&self, thread: &Thread) -> Result<ThreadId, DomainError>;
@@ -218,6 +227,18 @@ pub trait PostRepository: Send + Sync + 'static {
         board_id: BoardId,
         post_number: u64,
     ) -> Result<Option<ThreadId>, DomainError>;
+
+    /// Set the pinned flag on a post (v1.2). Pinned posts are excluded from cycle pruning.
+    async fn set_pinned(&self, id: PostId, pinned: bool) -> Result<(), DomainError>;
+
+    /// Return the oldest non-OP non-pinned reply ID in a thread. Used by cycle pruning.
+    async fn find_oldest_unpinned_reply(&self, thread_id: ThreadId) -> Result<Option<PostId>, DomainError>;
+
+    /// SHA-256 deduplication lookup (v1.2). Reuse existing keys for identical files.
+    async fn find_attachment_by_hash(&self, hash: &ContentHash) -> Result<Option<Attachment>, DomainError>;
+
+    /// Delete a single post by ID (used by cycle pruning; does not cascade).
+    async fn delete_by_id(&self, id: PostId) -> Result<(), DomainError>;
 }
 ```
 
@@ -775,3 +796,21 @@ pub trait FederationSync: Send + Sync + 'static {
 | `SearchIndex` | — | `PostRepository::search_fulltext` ✅ (basic, not a port) | `MeiliSearchIndex`, `PgFullTextIndex` | — |
 | `DnsblChecker` | — | — | `SpamhausDnsblChecker` | — |
 | `FederationSync` | — | — | — | `ActivityPubFederationSync` |
+
+---
+
+## `ArchiveRepository` (v1.2)
+
+**Purpose**: Persist threads that are pruned when a board exceeds `max_threads`, so they remain accessible instead of being deleted.
+
+**Gated by**: `board_config.archive_enabled`. When false, `NoopArchiveRepository` is used and threads are hard-deleted as before.
+
+```rust
+pub trait ArchiveRepository: Send + Sync + 'static {
+    async fn archive_thread(&self, thread: &Thread) -> Result<(), DomainError>;
+    async fn find_archived(&self, board_id: BoardId, page: Page) -> Result<Paginated<Thread>, DomainError>;
+}
+```
+
+**v1.2 adapter**: `PgArchiveRepository` — inserts into `archived_threads` table (migration 015) with `ON CONFLICT DO NOTHING` for idempotency.
+**No-op adapter**: `NoopArchiveRepository` — `archive_thread` silently succeeds; `find_archived` returns empty page.

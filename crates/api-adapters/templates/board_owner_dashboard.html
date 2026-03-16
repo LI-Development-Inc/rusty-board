@@ -24,6 +24,8 @@
         <tr class="cfg-section-header"><td colspan="2">Content Rules</td></tr>
         <tr><td class="cfg-label"><strong>Bump limit</strong><span class="cfg-desc">Replies past this count no longer bump the thread.</span></td>
             <td class="cfg-control"><input type="number" class="cfg-field cfg-number" id="cfg_bump_limit" data-key="bump_limit" value="{{ config.bump_limit }}" min="1"></td></tr>
+        <tr><td class="cfg-label"><strong>Max threads</strong><span class="cfg-desc">Maximum live threads. Oldest non-sticky thread is pruned (or archived) when exceeded. 0 = unlimited.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" id="cfg_max_threads" data-key="max_threads" value="{{ config.max_threads }}" min="0"></td></tr>
         <tr><td class="cfg-label"><strong>Max files</strong><span class="cfg-desc">Maximum file attachments per post.</span></td>
             <td class="cfg-control"><input type="number" class="cfg-field cfg-number" id="cfg_max_files" data-key="max_files" value="{{ config.max_files }}" min="1" max="10"></td></tr>
         <tr><td class="cfg-label"><strong>Max file size (KB)</strong><span class="cfg-desc">Maximum size per attachment.</span></td>
@@ -48,10 +50,24 @@
             <td class="cfg-control"><input type="number" class="cfg-field cfg-number" data-key="rate_limit_window_secs" value="{{ config.rate_limit_window_secs }}" min="1"></td></tr>
         <tr><td class="cfg-label"><strong>Posts per window</strong><span class="cfg-desc">Maximum posts per IP within the window.</span></td>
             <td class="cfg-control"><input type="number" class="cfg-field cfg-number" data-key="rate_limit_posts" value="{{ config.rate_limit_posts }}" min="1"></td></tr>
+        <tr><td class="cfg-label"><strong>Name rate limit (s)</strong><span class="cfg-desc">Minimum seconds between posts from the same name/tripcode. 0 = disabled.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" data-key="name_rate_limit_window_secs" value="{{ config.name_rate_limit_window_secs }}" min="0"></td></tr>
+        <tr class="cfg-section-header"><td colspan="2">Spam Filtering</td></tr>
+        <tr><td class="cfg-label"><strong>Enable spam filter</strong><span class="cfg-desc">Run heuristic spam scoring on new posts.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="spam_filter_enabled" {% if config.spam_filter_enabled %}checked{% endif %}></td></tr>
+        <tr><td class="cfg-label"><strong>Spam score threshold</strong><span class="cfg-desc">Posts scoring above this (0–1) are rejected. Default: 0.75.</span></td>
+            <td class="cfg-control"><input type="number" class="cfg-field cfg-number" data-key="spam_score_threshold" value="{{ config.spam_score_threshold }}" min="0" max="1" step="0.05"></td></tr>
+        <tr><td class="cfg-label"><strong>Duplicate detection</strong><span class="cfg-desc">Reject posts whose body matches a recent post on this board.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="duplicate_check" {% if config.duplicate_check %}checked{% endif %}></td></tr>
+        <tr class="cfg-section-header"><td colspan="2">Features</td></tr>
+        <tr><td class="cfg-label"><strong>Full-text search</strong><span class="cfg-desc">Show search form and enable GET /boards/:slug/search.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="search_enabled" {% if config.search_enabled %}checked{% endif %}></td></tr>
+        <tr><td class="cfg-label"><strong>Thread archive</strong><span class="cfg-desc">Archive pruned threads instead of deleting them. Enables the /archive page.</span></td>
+            <td class="cfg-control"><input type="checkbox" class="cfg-field" data-key="archive_enabled" {% if config.archive_enabled %}checked{% endif %}></td></tr>
       </tbody>
     </table>
     <div style="margin-top:.8rem">
-      <button class="btn-reply" onclick="saveOwnerConfig()">Save Config</button>
+      <button type="button" class="btn-reply" onclick="saveOwnerConfig()">Save Config</button>
       <span id="owner-cfg-status" style="font-size:.9em;margin-left:.8rem"></span>
     </div>
   </div>
@@ -105,17 +121,31 @@ function saveOwnerConfig() {
 
   fetch('/board/' + BOARD_SLUG + '/config', {
     method: 'PUT',
+    credentials: 'same-origin',
     headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
     body: JSON.stringify(patch)
   }).then(function(r) {
-    status.textContent = (r.ok || r.status === 200) ? '✓ Saved' : 'Error ' + r.status;
-    setTimeout(function() { status.textContent = ''; }, 2500);
-  }).catch(function(e) { status.textContent = 'Network error: ' + e; });
+    if (r.ok) {
+      status.textContent = '✓ Saved';
+      status.style.color = 'green';
+    } else {
+      r.text().then(function(body) {
+        status.textContent = 'Error ' + r.status + ': ' + body.slice(0, 80);
+        status.style.color = 'red';
+        console.error('saveOwnerConfig failed', r.status, body);
+      });
+    }
+    setTimeout(function() { status.textContent = ''; status.style.color = ''; }, 4000);
+  }).catch(function(e) {
+    status.textContent = 'Network error: ' + e;
+    status.style.color = 'red';
+    console.error('saveOwnerConfig network error', e);
+  });
 }
 
 // Load board volunteers
 (function loadVolunteers() {
-  fetch('/board/' + BOARD_SLUG + '/volunteers', {headers: {'Accept': 'application/json'}})
+  fetch('/board/' + BOARD_SLUG + '/volunteers', {credentials: 'same-origin', headers: {'Accept': 'application/json'}})
     .then(function(r) { return r.ok ? r.json() : []; })
     .then(function(vols) {
       var tbody = document.getElementById('volunteers-tbody');
@@ -127,7 +157,7 @@ function saveOwnerConfig() {
         return '<tr id="vol-row-' + v.user_id + '">' +
           '<td>' + v.username + '</td>' +
           '<td>' + v.assigned_at + '</td>' +
-          '<td><button class="btn-mod btn-reject" onclick="removeVolunteer('' + v.user_id + '',this)">Remove</button></td>' +
+          '<td><button class="btn-mod btn-reject" onclick="removeVolunteer(\'' + v.user_id + '\',this)">Remove</button></td>' +
           '</tr>';
       }).join('');
     })
@@ -143,7 +173,7 @@ function addVolunteer() {
   if (!username) { status.textContent = 'Enter a username.'; return; }
   status.textContent = 'Adding…';
   fetch('/board/' + BOARD_SLUG + '/volunteers', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
+    method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({username: username})
   }).then(function(r) {
     if (r.ok || r.status === 201) {
@@ -158,7 +188,7 @@ function addVolunteer() {
 
 function removeVolunteer(userId, btn) {
   btn.disabled = true;
-  fetch('/board/' + BOARD_SLUG + '/volunteers/' + userId, {method: 'DELETE'})
+  fetch('/board/' + BOARD_SLUG + '/volunteers/' + userId, {method: 'DELETE', credentials: 'same-origin'})
     .then(function(r) {
       if (r.ok || r.status === 204) {
         var row = document.getElementById('vol-row-' + userId);
@@ -169,7 +199,7 @@ function removeVolunteer(userId, btn) {
 }
 
 // Load pending flags for this board
-fetch('/mod/flags?page=1', {headers: {'Accept': 'application/json'}})
+fetch('/mod/flags?page=1', {credentials: 'same-origin', headers: {'Accept': 'application/json'}})
   .then(function(r) { return r.ok ? r.json() : null; })
   .then(function(data) {
     var el = document.getElementById('board-flags');

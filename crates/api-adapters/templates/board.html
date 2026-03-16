@@ -17,6 +17,15 @@
     <a href="/board/{{ board.slug }}">[Index]</a>
     <a href="/board/{{ board.slug }}/catalog">[Catalog]</a>
     {% if config.nsfw %}<span class="nsfw-tag">[NSFW]</span>{% endif %}
+    {% if config.archive_enabled %}
+    <a href="/board/{{ board.slug }}/archive">[Archive]</a>
+    {% endif %}
+    {% if config.search_enabled %}
+    <form class="board-search-form" action="/boards/{{ board.slug }}/search" method="GET" style="display:inline">
+      <input type="search" name="q" placeholder="Search /{{ board.slug }}/…" style="font-size:.85em;padding:.2rem .4rem;width:180px">
+      <button type="submit" style="font-size:.85em">[Search]</button>
+    </form>
+    {% endif %}
   </nav>
 </div>
 

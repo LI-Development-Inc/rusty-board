@@ -4,11 +4,8 @@
 {% block nav_boards %}
   <span class="nav-sep">|</span>
   {% for db in boards %}<a href="/board/{{ db.board.slug }}">/{{ db.board.slug }}/</a> {% endfor %}
-  <span class="nav-sep">|</span>
-  <a href="/mod/dashboard">[dashboard]</a>
 {% endblock %}
 
-{% block nav_right %}| <a href="/auth/logout">[logout]</a>{% endblock %}
 {% block footer_login %}| <a href="/auth/logout">[logout]</a>{% endblock %}
 
 {% block content %}
@@ -71,6 +68,34 @@
         {% endfor %}
       </tbody>
     </table>
+    {% endif %}
+
+    {% if role_display == "Admin" %}
+    <details style="margin-top:1rem">
+      <summary style="cursor:pointer;font-weight:bold">[+ Create New Board]</summary>
+      <div id="create-board-form" style="margin-top:.75rem;max-width:480px">
+        <div id="cb-error" class="error" style="display:none;margin-bottom:.5rem"></div>
+        <div style="display:grid;gap:.5rem">
+          <label class="form-label">Slug (e.g. <code>tech</code>)
+            <input type="text" id="cb-slug" placeholder="a-z, 0-9, dash, underscore — max 16 chars"
+                   maxlength="16" style="width:100%;box-sizing:border-box;margin-top:.25rem">
+          </label>
+          <label class="form-label">Title
+            <input type="text" id="cb-title" placeholder="Short board title"
+                   maxlength="80" style="width:100%;box-sizing:border-box;margin-top:.25rem">
+          </label>
+          <label class="form-label">Rules (optional)
+            <textarea id="cb-rules" rows="3" maxlength="1000"
+                      placeholder="Board rules shown at the top of the index"
+                      style="width:100%;box-sizing:border-box;margin-top:.25rem"></textarea>
+          </label>
+          <div>
+            <button id="cb-submit" class="btn-reply">Create Board</button>
+            <span id="cb-status" style="margin-left:.75rem;font-size:.9em"></span>
+          </div>
+        </div>
+      </div>
+    </details>
     {% endif %}
   </section>
 
@@ -213,6 +238,29 @@
     {% endif %}
   </section>
 
+  {# ── Broadcast Announcement (Admin only) ────────────────────────────────── #}
+  {% if role_display == "Admin" %}
+  <section class="dash-section" id="dash-announce">
+    <h2 class="dash-section-title">📢 Send Announcement</h2>
+    <p style="font-size:.9em;color:var(--color-muted,#888);margin:.25rem 0 .75rem">
+      Sends a staff message to every registered account.
+    </p>
+    <div style="max-width:560px">
+      <div id="ann-error" class="error" style="display:none;margin-bottom:.5rem"></div>
+      <label class="form-label">
+        Message
+        <textarea id="ann-body" rows="4" maxlength="4000"
+                  placeholder="Announcement text (max 4 000 characters)…"
+                  style="width:100%;box-sizing:border-box;margin-top:.25rem"></textarea>
+      </label>
+      <div style="margin-top:.5rem">
+        <button id="ann-submit" class="btn-reply">Send to All</button>
+        <span id="ann-status" style="margin-left:.75rem;font-size:.9em"></span>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {# ── Pending Requests ────────────────────────────────────────────────────
      None = section absent. Admin sees all pending; BoardOwner sees volunteer
      requests targeting their boards. #}
@@ -262,11 +310,109 @@
 
 {% block scripts %}
 <script>
+/* ── Create Board ─────────────────────────────────────────────────────── */
+(function() {
+  var btn = document.getElementById('cb-submit');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var slug  = (document.getElementById('cb-slug').value  || '').trim();
+    var title = (document.getElementById('cb-title').value || '').trim();
+    var rules = (document.getElementById('cb-rules').value || '').trim();
+    var errEl = document.getElementById('cb-error');
+    var status = document.getElementById('cb-status');
+    errEl.style.display = 'none';
+    if (!slug || !title) {
+      errEl.textContent = 'Slug and title are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    btn.disabled = true;
+    status.textContent = 'Creating…';
+    fetch('/admin/boards', {
+      credentials: 'same-origin',
+    method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({slug: slug, title: title, rules: rules}),
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        status.textContent = '';
+        window.rbToast.ok('✓ Board /' + slug + '/ created');
+        document.getElementById('cb-slug').value  = '';
+        document.getElementById('cb-title').value = '';
+        document.getElementById('cb-rules').value = '';
+        setTimeout(function() { window.location.reload(); }, 900);
+      } else {
+        errEl.textContent = (res.data && res.data.message) || 'Failed to create board.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        status.textContent = '';
+      }
+    })
+    .catch(function() {
+      errEl.textContent = 'Network error.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      status.textContent = '';
+    });
+  });
+})();
+
+/* ── Broadcast Announcement ───────────────────────────────────────────── */
+(function() {
+  var btn = document.getElementById('ann-submit');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var body   = (document.getElementById('ann-body').value || '').trim();
+    var errEl  = document.getElementById('ann-error');
+    var status = document.getElementById('ann-status');
+    errEl.style.display = 'none';
+    if (!body) {
+      errEl.textContent = 'Announcement body cannot be empty.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (!confirm('Send this announcement to ALL registered users?')) return;
+    btn.disabled = true;
+    status.textContent = 'Sending…';
+    fetch('/admin/announce', {
+      credentials: 'same-origin',
+    method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({body: body}),
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        window.rbToast.ok('✓ Announcement sent to ' + (res.data.sent || 0) + ' users');
+        document.getElementById('ann-body').value = '';
+        btn.disabled = false;
+        status.textContent = '';
+      } else {
+        errEl.textContent = (res.data && res.data.message) || 'Failed to send.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        status.textContent = '';
+      }
+    })
+    .catch(function() {
+      errEl.textContent = 'Network error.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      status.textContent = '';
+    });
+  });
+})();
+
 /* ── Deactivate user ─────────────────────────────────────────────────── */
 function deactivateUser(id, username, btn) {
   if (!confirm('Deactivate ' + username + '?')) return;
   btn.disabled = true;
-  fetch('/admin/users/' + id + '/deactivate', {method: 'POST'})
+  fetch('/admin/users/' + id + '/deactivate', {credentials: 'same-origin',
+    method: 'POST'})
     .then(function(r) {
       if (r.ok || r.status === 204) {
         var row = document.getElementById('user-row-' + id);
@@ -283,7 +429,8 @@ function deactivateUser(id, username, btn) {
 function deletePost(id, btn) {
   if (!confirm('Delete this post?')) return;
   btn.disabled = true;
-  fetch('/mod/posts/' + id, {method: 'DELETE'})
+  fetch('/mod/posts/' + id, {credentials: 'same-origin',
+    method: 'DELETE'})
     .then(function(r) {
       if (r.ok || r.status === 204) {
         var row = document.getElementById('post-row-' + id);
@@ -296,7 +443,8 @@ function deletePost(id, btn) {
 /* ── Staff request approve / deny ────────────────────────────────────── */
 function approveRequest(id, btn) {
   btn.disabled = true;
-  fetch('/admin/requests/' + id + '/approve', {method: 'POST'})
+  fetch('/admin/requests/' + id + '/approve', {credentials: 'same-origin',
+    method: 'POST'})
     .then(function(r) {
       if (r.ok || r.status === 204) {
         var row = document.getElementById('req-row-' + id);
@@ -311,6 +459,7 @@ function denyRequest(id, btn) {
   if (note === null) return;
   btn.disabled = true;
   fetch('/admin/requests/' + id + '/deny', {
+    credentials: 'same-origin',
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({note: note || null})

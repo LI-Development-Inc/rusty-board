@@ -55,6 +55,8 @@ impl ThreadRepository for OkThreadRepo {
             bumped_at:   Utc::now(),
             sticky:      false,
             closed:      false,
+            cycle:  false,
+                    cycle:       false,
             created_at:  Utc::now(),
         })
     }

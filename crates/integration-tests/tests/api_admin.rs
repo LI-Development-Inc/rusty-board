@@ -13,6 +13,7 @@ use chrono::Utc;
 use domains::{errors::DomainError, models::*, ports::*};
 use services::board::{BoardError, BoardRepo};
 use services::staff_request::StaffRequestService;
+use services::staff_message::StaffMessageService;
 use services::user::UserService;
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -136,11 +137,23 @@ impl StaffRequestRepository for NopRequestRepo {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+#[derive(Clone)]
+struct NopMsgRepo;
+#[async_trait::async_trait]
+impl StaffMessageRepository for NopMsgRepo {
+    async fn save(&self, _: &StaffMessage) -> Result<StaffMessageId, DomainError> { unimplemented!() }
+    async fn find_for_user(&self, _: UserId, _: Page) -> Result<Paginated<StaffMessage>, DomainError> { Ok(Paginated::new(vec![], 0, Page(1), 15)) }
+    async fn count_unread(&self, _: UserId) -> Result<u32, DomainError> { Ok(0) }
+    async fn mark_read(&self, _: StaffMessageId) -> Result<(), DomainError> { Ok(()) }
+    async fn delete_expired(&self, _: u32) -> Result<u32, DomainError> { Ok(0) }
+}
+
 fn app() -> axum::Router {
     let svc        = Arc::new(UserService::new(OkUserRepo, OkAuth, 3600));
     let board_svc  = Arc::new(NoBoardRepo);
     let request_svc = Arc::new(StaffRequestService::new(NopRequestRepo, OkUserRepo));
-    admin_routes(svc, board_svc, request_svc)
+    let msg_svc = Arc::new(StaffMessageService::new(NopMsgRepo));
+    admin_routes(svc, board_svc, request_svc, msg_svc)
 }
 
 fn with_admin(mut req: Request<Body>) -> Request<Body> {

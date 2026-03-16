@@ -127,15 +127,18 @@
       <a class="post-number" href="#post-{{ pd.post.post_number }}" data-post-number="{{ pd.post.post_number }}">No.{{ pd.post.post_number }}</a>
       <a class="post-flag-link" href="javascript:void(0)" data-thread="{{ thread.id }}" data-board="{{ board.slug }}">[Flag]</a>
       {% if viewer_role.is_some() %}
-      <span class="mod-toolbar" data-post-id="{{ pd.post.id }}" data-ip-hash="{{ pd.post.ip_hash }}" data-thread-id="{{ thread.id }}" data-is-op="{% if loop.index == 1 %}1{% else %}0{% endif %}" data-sticky="{{ thread.sticky }}" data-closed="{{ is_closed }}">
+      <span class="mod-toolbar" data-post-id="{{ pd.post.id }}" data-ip-hash="{{ pd.post.ip_hash }}" data-thread-id="{{ thread.id }}" data-is-op="{% if loop.index == 1 %}1{% else %}0{% endif %}" data-sticky="{{ thread.sticky }}" data-closed="{{ is_closed }}" data-cycle="{{ is_cycle }}" data-pinned="{{ pd.post.pinned }}">
         <span class="mod-btn" data-action="D"   title="Delete this post">[D]</span>
         <span class="mod-btn" data-action="D*"  title="Delete all posts by this IP in thread">[D*]</span>
         <span class="mod-btn" data-action="B"   title="Ban this IP">[B]</span>
         <span class="mod-btn" data-action="BD"  title="Ban IP and delete this post">[B&amp;D]</span>
         <span class="mod-btn" data-action="BD*" title="Ban IP and delete all posts by IP in thread">[B&amp;D*]</span>
         {% if loop.index == 1 %}
-        <span class="mod-btn" data-action="S" title="Toggle sticky">[{% if thread.sticky %}S-{% else %}S+{% endif %}]</span>
-        <span class="mod-btn" data-action="C" title="Close/Re-open thread (TODO v1.2: Cycle)">[{% if is_closed %}C-{% else %}C+{% endif %}]</span>
+        <span class="mod-btn" data-action="S"  title="Toggle sticky">[{% if thread.sticky %}S-{% else %}S+{% endif %}]</span>
+        <span class="mod-btn" data-action="CL" title="Close/Re-open thread">[{% if is_closed %}CL-{% else %}CL+{% endif %}]</span>
+        <span class="mod-btn" data-action="CY" title="Toggle cycle mode (prunes oldest post instead of closing)">[{% if is_cycle %}CY-{% else %}CY+{% endif %}]</span>
+        {% else %}
+        <span class="mod-btn" data-action="PIN" title="Pin/unpin post (pinned posts are never pruned in cycle threads)">[{% if pd.post.pinned %}PIN-{% else %}PIN+{% endif %}]</span>
         {% endif %}
       </span>
       {% endif %}
@@ -217,11 +220,12 @@
 (function() {
   'use strict';
 
-  var THREAD_ID    = '{{ thread.id }}';
-  var BOARD_SLUG   = '{{ board.slug }}';
-  var IS_MOD       = {{ viewer_role.is_some()|lower }};
+  var THREAD_ID     = '{{ thread.id }}';
+  var BOARD_SLUG    = '{{ board.slug }}';
+  var IS_MOD        = {{ viewer_role.is_some()|lower }};
   var THREAD_STICKY = {{ thread.sticky|lower }};
   var THREAD_CLOSED = {{ is_closed|lower }};
+  var THREAD_CYCLE  = {{ is_cycle|lower }};
 
   /* ── (You) tracking ──────────────────────────────────────────────────── */
   var YOU_KEY = 'you:' + THREAD_ID;
@@ -539,7 +543,7 @@
     if (!reason) { status.textContent = 'Enter a reason.'; return; }
     var btn = e.target; btn.disabled = true; status.textContent = 'Submitting...';
     fetch('/board/' + flagBoard + '/thread/' + flagThread + '/flag', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
+      method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({reason: reason})
     }).then(function(r) {
       status.textContent = (r.ok || r.status === 201) ? 'Reported.' : 'Error — try again.';
@@ -691,15 +695,36 @@
         });
         window.rbToast.ok('Thread ' + (want ? 'stickied' : 'un-stickied') + '.');
       });
-    } else if (action === 'C') {
+    } else if (action === 'CL') {
       var wantClose = !THREAD_CLOSED;
       if (!confirm((wantClose ? 'Close' : 'Re-open') + ' this thread?')) return;
       modFetch('POST', '/mod/threads/' + threadId + '/close', { value: wantClose }, function() {
         THREAD_CLOSED = wantClose;
-        document.querySelectorAll('.mod-btn[data-action="C"]').forEach(function(b) {
-          b.textContent = wantClose ? '[C-]' : '[C+]';
+        document.querySelectorAll('.mod-btn[data-action="CL"]').forEach(function(b) {
+          b.textContent = wantClose ? '[CL-]' : '[CL+]';
         });
         window.rbToast.ok('Thread ' + (wantClose ? 'closed' : 're-opened') + '.');
+      });
+    } else if (action === 'CY') {
+      var wantCycle = !THREAD_CYCLE;
+      if (!confirm((wantCycle ? 'Enable' : 'Disable') + ' cycle mode on this thread?')) return;
+      modFetch('POST', '/mod/threads/' + threadId + '/cycle', { value: wantCycle }, function() {
+        THREAD_CYCLE = wantCycle;
+        document.querySelectorAll('.mod-btn[data-action="CY"]').forEach(function(b) {
+          b.textContent = wantCycle ? '[CY-]' : '[CY+]';
+        });
+        window.rbToast.ok('Cycle mode ' + (wantCycle ? 'enabled' : 'disabled') + '.');
+      });
+    } else if (action === 'PIN') {
+      var wantPin = toolbar.dataset.pinned !== 'true';
+      modFetch('POST', '/mod/posts/' + postId + '/pin', { value: wantPin }, function() {
+        toolbar.dataset.pinned = wantPin ? 'true' : 'false';
+        document.querySelectorAll('.mod-btn[data-action="PIN"]').forEach(function(b) {
+          if (b.closest('.mod-toolbar') === toolbar) {
+            b.textContent = wantPin ? '[PIN-]' : '[PIN+]';
+          }
+        });
+        window.rbToast.ok('Post ' + (wantPin ? 'pinned' : 'unpinned') + '.');
       });
     }
   });

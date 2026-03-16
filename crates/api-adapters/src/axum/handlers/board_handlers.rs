@@ -181,6 +181,7 @@ fn default_page() -> u32 { 1 }
 
 /// `GET /boards/:slug/search?q=...` — full-text search for posts on a board.
 ///
+/// Returns an HTML results page for browser requests (text/html).
 /// Returns `404` if the board does not exist.
 /// Returns `403` if `board_config.search_enabled` is false.
 /// Returns `400` if `q` is empty or missing.
@@ -188,30 +189,108 @@ pub async fn search_board<BR, PR>(
     State(s): State<SearchState<BR, PR>>,
     Path(slug): Path<String>,
     Query(params): Query<SearchQuery>,
-) -> Result<Json<crate::common::pagination::PageResponse<domains::models::Post>>, crate::common::errors::ApiError>
+) -> Result<axum::response::Response, ApiError>
 where
     BR: services::board::BoardRepo,
     PR: PostRepository,
 {
     if params.q.trim().is_empty() {
-        return Err(crate::common::errors::ApiError::BadRequest("search query `q` must not be empty".into()));
+        return Err(ApiError::BadRequest("search query `q` must not be empty".into()));
     }
 
     let board = s.board_svc.get_by_slug(&slug).await
-        .map_err(crate::common::errors::ApiError::from)?;
+        .map_err(ApiError::from)?;
 
     let config = s.board_svc.get_config(board.id).await
-        .map_err(crate::common::errors::ApiError::from)?;
+        .map_err(ApiError::from)?;
 
     if !config.search_enabled {
-        return Err(crate::common::errors::ApiError::Forbidden);
+        return Err(ApiError::Forbidden);
     }
 
     let page = domains::models::Page::new(params.page);
-    let results = s.post_repo
+    let paginated = s.post_repo
         .search_fulltext(board.id, &params.q, page)
         .await
-        .map_err(crate::common::errors::ApiError::from)?;
+        .map_err(ApiError::from)?;
 
-    Ok(Json(crate::common::pagination::PageResponse::from(results)))
+    let total_pages = paginated.total_pages() as u32;
+    let total       = paginated.total;
+
+    let tmpl = crate::axum::templates::SearchResultsTemplate {
+        board,
+        query:        params.q,
+        results:      paginated.items,
+        total,
+        current_page: params.page,
+        total_pages,
+    };
+
+    use axum::response::IntoResponse;
+    Ok(tmpl.into_response())
+}
+
+// ── Archive ────────────────────────────────────────────────────────────────────
+
+/// Combined state for the archive handler.
+pub struct ArchiveState<BR, AR>
+where
+    BR: services::board::BoardRepo,
+    AR: domains::ports::ArchiveRepository,
+{
+    pub board_svc:    std::sync::Arc<BR>,
+    pub archive_repo: std::sync::Arc<AR>,
+}
+
+impl<BR, AR> Clone for ArchiveState<BR, AR>
+where
+    BR: services::board::BoardRepo,
+    AR: domains::ports::ArchiveRepository,
+{
+    fn clone(&self) -> Self {
+        Self {
+            board_svc:    self.board_svc.clone(),
+            archive_repo: self.archive_repo.clone(),
+        }
+    }
+}
+
+/// `GET /board/:slug/archive` — paginated list of archived threads for a board.
+///
+/// Returns `404` if the board does not exist.
+/// Returns `403` if `board_config.archive_enabled` is false.
+pub async fn show_archive<BR, AR>(
+    State(s): State<ArchiveState<BR, AR>>,
+    Path(slug): Path<String>,
+    Query(q): Query<PaginationQuery>,
+) -> Result<axum::response::Response, ApiError>
+where
+    BR: services::board::BoardRepo,
+    AR: domains::ports::ArchiveRepository,
+{
+    let board = s.board_svc.get_by_slug(&slug).await
+        .map_err(ApiError::from)?;
+
+    let config = s.board_svc.get_config(board.id).await
+        .map_err(ApiError::from)?;
+
+    if !config.archive_enabled {
+        return Err(ApiError::Forbidden);
+    }
+
+    let page = domains::models::Page::new(q.page);
+    let paginated = s.archive_repo
+        .find_archived(board.id, page)
+        .await
+        .map_err(ApiError::from)?;
+
+    let total_pages = paginated.total_pages() as u32;
+    let tmpl = crate::axum::templates::ArchiveTemplate {
+        board,
+        threads:      paginated.items,
+        current_page: q.page,
+        total_pages,
+    };
+    use axum::response::IntoResponse;
+    Ok(tmpl.into_response())
 }

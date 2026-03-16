@@ -52,17 +52,25 @@
 <body>
   <header class="site-header">
     <nav class="site-nav">
-      <a href="/overboard" class="site-name">rusty-board</a>
-      <span class="nav-sep">|</span>
-      <a href="/overboard">[overboard]</a>
-      {% block nav_boards %}{% endblock %}
-      {% block nav_other_boards %}{% endblock %}
-      <span id="nav-other-boards" class="nav-other-boards"></span>
-      <span class="nav-right">
+      <!-- LEFT: brand + current board context -->
+      <div class="nav-left">
+        <a href="/overboard" class="site-name">rusty-board</a>
+        <span class="nav-sep">|</span>
+        <a href="/overboard">[overboard]</a>
+        {% block nav_boards %}{% endblock %}
+      </div>
+      <!-- CENTER: all other board slugs, excluding the current one (populated by JS) -->
+      <div class="nav-center">
+        <span id="nav-other-boards"></span>
+      </div>
+      <!-- RIGHT: settings, auth, dashboard, inbox -->
+      <div class="nav-right">
         <a href="javascript:void(0)" id="settings-btn">[settings]</a>
-        {# nav_right default: replaced by JS once /auth/me resolves #}
-        {% block nav_right %}<span id="nav-auth-area">| <a href="/auth/login">[login]</a></span>{% endblock %}
-      </span>
+        <span id="nav-auth-area">
+          <span class="nav-sep">|</span>
+          <a href="/auth/login">[login]</a>
+        </span>
+      </div>
     </nav>
   </header>
 
@@ -108,27 +116,47 @@
   })();
 
   // ── Auth-aware nav ───────────────────────────────────────────────────────────
-  // Replaces the default [login] link once we know the session state.
-  // Uses /auth/me which reads the HttpOnly cookie server-side.
   (function() {
-    var area = document.getElementById('nav-auth-area');
-    if (!area) return; // dashboard pages override nav_right entirely
     fetch('/auth/me', { credentials: 'same-origin' })
       .then(function(r) {
-        if (r.status === 401) return null; // not logged in — keep default
+        if (r.status === 401) return null;
         if (!r.ok) return null;
         return r.json();
       })
       .then(function(data) {
-        if (!data) return;
-        // Replace [login] with: username [role-badge] | [dashboard] [logout]
+        var area = document.getElementById('nav-auth-area');
+        if (!area) return;
+        if (!data) {
+          // Not logged in — keep [login] only
+          area.innerHTML = '<span class="nav-sep">|</span> <a href="/auth/login">[login]</a>';
+          return;
+        }
+        // Logged in — settings | Role badge | dashboard | inbox | logout
         area.innerHTML =
-          '| <span class="nav-user-badge">' +
+          '<span class="nav-sep">|</span>' +
+          ' <span class="nav-user-badge">' +
             '<strong>' + escHtml(data.username) + '</strong>' +
             ' <span class="badge-role">' + escHtml(data.role) + '</span>' +
           '</span>' +
-          ' | <a href="' + escHtml(data.dashboard_url) + '">[dashboard]</a>' +
+          ' <span class="nav-sep">|</span>' +
+          ' <a href="' + escHtml(data.dashboard_url) + '">[dashboard]</a>' +
+          ' <a href="/staff/messages" id="nav-inbox-link">[inbox]</a>' +
+          ' <span class="nav-sep">|</span>' +
           ' <a href="/auth/logout">[logout]</a>';
+
+        // Unread message badge
+        fetch('/staff/messages/unread', { credentials: 'same-origin' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(d) {
+            if (!d || d.count < 1) return;
+            var link = document.getElementById('nav-inbox-link');
+            if (link) {
+              link.textContent = '[inbox (' + d.count + ')]';
+              link.style.fontWeight = 'bold';
+              link.style.color = 'var(--color-accent, #7b241c)';
+            }
+          })
+          .catch(function() {});
       })
       .catch(function() {}); // silently skip if server unreachable
   })();
@@ -139,7 +167,7 @@
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // ── Dynamic board list in nav ────────────────────────────────────────────────
+  // ── Dynamic board list in nav (center zone) ──────────────────────────────────
   (function() {
     var container = document.getElementById('nav-other-boards');
     if (!container) return;
@@ -151,12 +179,12 @@
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(data) {
         if (!data || !data.items) return;
-        var html = data.items
-          .filter(function(b) { return b.slug !== currentSlug; })
-          .map(function(b) {
-            return ' <a href="/board/' + b.slug + '">/' + b.slug + '/</a>';
-          }).join(' -');
-        if (html) container.innerHTML = '<span class="nav-sep">|</span>' + html;
+        var boards = data.items.filter(function(b) { return b.slug !== currentSlug; });
+        if (!boards.length) return;
+        var parts = boards.map(function(b) {
+          return '<a href="/board/' + b.slug + '">/' + b.slug + '/</a>';
+        });
+        container.innerHTML = '<span class="nav-sep">|</span> ' + parts.join(' <span class="nav-sep">|</span> ');
       })
       .catch(function() {});
   })();
@@ -269,6 +297,9 @@
       html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
       html = html.replace(/__(.+?)__/g,     '<u>$1</u>');
       html = html.replace(/~~(.+?)~~/g,     '<s>$1</s>');
+      // ==text== and (((text))) work both inline and as full-line tokens.
+      html = html.replace(/==([^=\n]+)==/g,            '<span class="redtext">$1</span>');
+      html = html.replace(/\(\(\(([^)\n]+)\)\)\)/g,   '<span class="bluetext">$1</span>');
       return html;
     }
 

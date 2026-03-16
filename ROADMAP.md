@@ -86,10 +86,10 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 | `storage-adapters/src/media/videos.rs` | `VideoMediaProcessor` — ffmpeg-next keyframe extraction | v1.0 patch |
 | `storage-adapters/src/media/documents.rs` | `DocumentMediaProcessor` — pdfium-render first page | v1.0 patch |
 | `domains/src/models.rs` | `CaptchaVerifier` port not yet wired (schema field exists) | v1.1.1 |
-| `domains/src/models.rs` | `SearchIndex` port not yet wired (schema field exists) | v1.2 |
-| `domains/src/models.rs` | Archive adapter not yet wired (schema field exists) | v1.2 |
+| `domains/src/models.rs` | ~~`SearchIndex` port not yet wired~~ | ✅ v1.2 — HTML front-end + route |
+| `domains/src/models.rs` | ~~Archive adapter not yet wired~~ | ✅ v1.2 — `ArchiveRepository` + `PgArchiveRepository` |
 | `domains/src/models.rs` | `FederationSync` port not yet wired (schema field exists) | v2.0 |
-| `services/src/common/tripcode.rs` | Super tripcode `###` returns `!!!STUB` — ed25519 two-step flow | v1.2 |
+| `services/src/common/tripcode.rs` | ~~Super tripcode `###` returns `!!!STUB`~~ | ✅ HMAC-SHA256 implemented |
 
 ---
 
@@ -102,7 +102,7 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 **Tripcodes & Capcodes**
 - `#password` — insecure tripcode: `SHA-256(password)[0..5]` displayed as `!{10hex}`
 - `##password` — secure tripcode: `SHA-256(pepper || "::" || password)[0..5]` displayed as `!!{10hex}`
-- `###password` — super tripcode: currently a stub (`!!!STUB`); full ed25519 impl in v1.2
+- `###password` — super tripcode: HMAC-SHA256(key=pepper, msg="###"||password) → `!!!{10hex}`
 - `### Role` — capcode: verifies poster's server-side role, displayed as `!!!! {Role}`
 - Five capcode CSS variants with dark-mode overrides (admin, janitor, board-owner, volunteer, developer)
 - `tripcode_pepper` config key in `Settings` for signing key
@@ -139,76 +139,119 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 - `testuser / user123` account seeded as the canonical `user` role example
 
 **UX & Thread View Fixes** (delivered alongside v1.1)
-- Cross-board `>>>/{slug}/{N}` links now resolve correctly via `GET /board/{slug}/post/{N}` server-side redirect (`PostRepository::find_thread_id_by_post_number`)
+- Cross-board `>>>/{slug}/{N}` links resolve via `GET /board/{slug}/post/{N}` server-side redirect (`PostRepository::find_thread_id_by_post_number`)
 - Thread view shows all posts up to bump limit (500) without pagination — `PostRepository::find_all_by_thread`
-- (You) post tracking: reply form sends `Accept: application/json`; server returns `{post_number}` in 201 JSON; post number stored in `localStorage` and displayed as green `(You)` badge on your posts and `>>{N} (You)` on quote links
-- Click-to-quote triggers only on `No.{N}` anchor, not the whole post
-- Post timestamps: user-selectable format (relative / MM/DD/YY HH:MM:SS / ISO 8601); preference persisted in `localStorage`; relative timestamps refresh every 60 s
-- Auto-update toggle with exponential back-off (10 s → … → 5 min cap); preference persisted in `sessionStorage`
+- (You) post tracking: reply form sends `Accept: application/json`; server returns `{post_number}` in 201 JSON; stored in `localStorage`; shown as green `(You)` badge and `>>{N} (You)` on quote links
+- Click-to-quote binds directly to each `No.{N}` anchor — no event delegation; hover-preview popup clicks are guarded
+- Shared reply form: one `<form id="shared-reply-form">` element physically moves between the top position and the Quick Reply draggable box — zero sync needed
+- Quote insertion appends `>>{N}` at the end of the textarea on a new line; duplicate guard prevents double-insert
+- Post timestamps: user-selectable format (relative / MM/DD/YY HH:MM:SS / ISO 8601) in the Settings panel; shared `window.rbApplyTimeFormat` runs on every page with `time.post-date[data-ts]` elements; relative mode refreshes every 60 s
+- Auto-update with exponential back-off (10 s → 5 min cap); pauses automatically if any reply form has unsaved content; moved to thread bottom nav
 - Images rendered in overboard view (bulk attachment fetch via `PostRepository::find_attachments_by_post_ids`)
+- OP images displayed on board index thread list (thumbnail from `ThreadSummary::thumbnail_key`)
+- Unified post header across thread, overboard, and board index: `Name · Tripcode · (You) · time · ID · IP(10) · No.N`; tripcode colour-coded by security level (`insecure`=amber, `secure`=blue, `super`=orange-red)
+- Catalog view truncates OP body to 200 characters
+- `ThreadSummary` enriched with OP post fields (`op_name`, `op_tripcode`, `op_created_at`, `op_post_number`, `op_ip_hash`) so the board index can render a full post header without an extra query
 - User dashboard displays real `joined_at` date from `User::created_at`
 - Board-owner dashboard lists actual volunteers for owned boards
+- Staff request approve/deny handlers (`POST /admin/requests/{id}/approve|deny`) wired; board owners can approve volunteer requests via the same endpoint (service-level permission check)
+- `DefaultBodyLimit::max(12 MB)` added globally so image uploads up to the 10 MB board limit work correctly
+- IP hash in mod view truncated to first 10 characters (full hash preserved in `data-ip-hash` for ban operations)
 
-### v1.1 Open Items (→ v1.1.1)
+**Post Body Formatting** (client-side, `window.rbFormatPostBody` in `base.html` — runs on every page)
+- Line-scoped: `>greentext`, `<pinktext`, `==REDTEXT==`, `(((bluetext)))`
+- Inline: `` `code` ``, `**bold**`, `__underline__`, `~~strike~~`
+- Multi-line: `` ``` ``fenced code block`` ``` `` → `<pre class="code-block">`, `[spoiler]…[/spoiler]` → hover-reveal span
+- All formatting also applies to overboard post bodies (shared via `base.html`)
+
+**Theme System**
+- Three themes: Futaba (default), Yotsuba B, Dark — selectable in the Settings panel
+- Dark theme: complete CSS rewrite using `--color-*` variable overrides so `style.css` rules cascade correctly; all post elements, tripcodes, settings panel, mod toolbar styled
+- Settings panel appears as fixed popup (top-right) on all themes; contains Theme and Timestamp Format selectors on thread pages
+
+### v1.1 Open Items
 
 | Item | Description | Target |
 |------|-------------|--------|
-| Super tripcode `###` | Stub returns `!!!STUB`; full ed25519 needs `TripkeyRepository` port and two-step post flow | v1.2 |
+| Super tripcode `###` | ✅ HMAC-SHA256 implemented; ed25519 proof-of-identity upgrade still possible via `TripkeyRepository` | v1.2 done |
 | `CaptchaVerifier` wiring | Port not yet connected in `PostService` even though `captcha_required` schema field exists | v1.1.1 |
-| Staff message nav badge | `unread_count` is computed but not yet surfaced in the nav bar | v1.1.1 |
 | CSP / inline scripts | Templates contain inline `<script>` blocks; extract to `/static/js/` + nonce CSP | v1.1.1 |
-| `auth-tripcode` gate | `parse_name_field` is always-on; add `#[cfg(feature = "auth-tripcode")]` if optional gating desired | v1.1.1 |
-| Thread cycle mode | `[C]` mod button is wired but `cycle` DB column and oldest-post pruning logic are not implemented | v1.2 |
-| Thread pin-in-cycle | `[Pin]` for cycle threads — requires `pinned` column on `posts` + prune exclusion | v1.2 |
-| `X-Request-Id` middleware | `request_id.rs` module declared; `tower-http::SetRequestId` implementation pending | v1.1.1 |
-| Login brute-force protection | No account lockout after N failed attempts; rate limit on `/auth/login` via `RateLimiter` port | v1.1.1 |
+| Thread cycle mode | ✅ Completed v1.2 — migration 014, `set_cycle`, `find_oldest_unpinned_reply`, cycle pruning in `PostService` |
+| Thread pin-in-cycle | ✅ Completed v1.2 — `set_pinned`, `[PIN+/-]` mod button on reply posts |
 
+### Completed in v1.1.1
+
+| Item | Resolution |
+|------|------------|
+| Staff message nav badge | ✅ `GET /staff/messages/unread` + nav badge in `base.html` |
+| `auth-tripcode` feature gate | ✅ `#[cfg(feature = "auth-tripcode")]` on `parse_name_field`; enabled by default in all dependent crates |
+| Login brute-force protection | ✅ `LoginGuard` (`middleware/login_guard.rs`) — 5 failures → 10-min lockout per username; injected as `axum::Extension` |
+| `X-Request-Id` middleware | ✅ Already present — `SetRequestIdLayer` + `PropagateRequestIdLayer` in `composition.rs` |
 ---
 
 ## v1.2 — Search, Deduplication & Adapter Expansion
 
 **Focus**: Pluggable full-text search. File deduplication. First alternative database adapter. First alternative media storage adapter. Super tripcode ed25519.
 
+**Status**: ✅ Complete. Build clean.
+
+### Completed in v1.2 Session
+
+| Item | Notes |
+|------|-------|
+| Thread Cycle Mode | Migration 014; `Thread::cycle`; `Post::pinned`; `toggle_cycle` + `set_post_pinned` handlers; `[CY]`/`[PIN]` mod toolbar |
+| File Deduplication | `find_attachment_by_hash` on `PostRepository`; SHA-256 index; dedup check in `PostService::create_post` |
+| Super Tripcode `###` | HMAC-SHA256(key=pepper, msg="###"\|\|password) — server-bound, no `!!!STUB` |
+| `DnsblChecker` port | Defined in `domains::ports`; `SpamhausDnsblChecker` adapter implementation next |
+
 ### Planned
 
-**Super Tripcodes** — `TripkeyRepository` port + ed25519 two-step post flow
+**Super Tripcodes** ✅ — HMAC-SHA256 implementation (v1.2 session)
+- `###password` now computes `HMAC-SHA256(key=pepper, msg="###"||password)` → `!!!{10hex}`
+- Server-bound: identity is tied to the pepper secret; cannot be precomputed without it
+- The full ed25519 challenge-response flow (proof-of-identity even against a compromised server) remains a future upgrade path via `TripkeyRepository` port
 
-**Thread Cycle Mode** — `[C]` mod action + `[Pin]` (deferred from v1.1)
-- Add `cycle BOOLEAN NOT NULL DEFAULT FALSE` column to `threads` (migration 014)
-- Add `pinned BOOLEAN NOT NULL DEFAULT FALSE` column to `posts` (migration 014)
-- `ThreadRepository` gains `set_cycle(id, bool)` port method
-- `PostRepository` gains `set_pinned(id, bool)` port method
-- `PostService::create_post` prunes oldest unpinned post when `cycle=true` and reply count ≥ bump limit
-- `toggle_cycle` and `pin_post` mod handlers + routes
-- Thread template: `[C+/-]` calls new `/mod/threads/:id/cycle` endpoint; `[Pin]` calls `/mod/posts/:id/pin`
+**Thread Cycle Mode** ✅ — implemented in v1.2 session
+- Migration 014: `cycle BOOLEAN DEFAULT FALSE` on `threads`, `pinned BOOLEAN DEFAULT FALSE` on `posts`
+- `ThreadRepository::set_cycle`, `PostRepository::set_pinned`, `find_oldest_unpinned_reply`, `delete_by_id`
+- `PostService::create_post` prunes oldest unpinned reply when `cycle=true && past_bump_limit`
+- `toggle_cycle` (`POST /mod/threads/:id/cycle`) and `set_post_pinned` (`POST /mod/posts/:id/pin`) handlers
+- Thread toolbar: `[CL+/-]` close, `[CY+/-]` cycle, `[PIN+/-]` per-post pin (reply posts only)
+- `AuditAction::CycleThread` and `AuditAction::PinPost` audit trail
 
-**Pluggable Search** (`search-meilisearch` / `search-postgres-fts`)
-- `SearchIndex` port implemented with `MeiliSearchIndex` and `PgFullTextIndex` adapters
+**Pluggable Search** ✅
+- HTML front-end: `search_results.html` template, `GET /boards/:slug/search` renders paginated post results
+- Search form in board nav when `search_enabled = true`; gated by `403` when disabled
 
-**File Deduplication**
-- SHA-256 already in `attachments`; `MediaStorage` updated with hash-lookup
-- Identical files share one stored copy
+**File Deduplication** ✅ — implemented in v1.2 session
+- `PostRepository::find_attachment_by_hash` added (uses migration 014 index on `attachments.hash`)
+- `PostService::create_post` checks hash before uploading; reuses existing `media_key` + `thumbnail_key`
+- No re-upload overhead for identical images posted across threads or boards
 
-**SQLite Backend** (`db-sqlite`)
-- All repository ports implemented — first real `*Repository` port swap
-- Contract tests must pass for SQLite exactly as they do for Postgres
+~~**SQLite Backend**~~ — pushed to v2.0 (same scope as SurrealDB)
 
 **Alternative Media Storage**
 - `R2MediaStorage` (`media-r2`) — Cloudflare R2
 - `BackblazeMediaStorage` (`media-backblaze`) — Backblaze B2
 
-**DNSBL Checking** (`spam-dnsbl`)
-- `DnsblChecker` port; `SpamhausDnsblChecker` adapter; fail-open on lookup failure
+**DNSBL Checking** ✅
+- `DnsblChecker` port; `SpamhausDnsblChecker` (reverse-IP DNS vs `zen.spamhaus.org`); fail-open
+- Step 1b in `PostService::create_post`; gated by `spam_filter_enabled`; injected via `with_dnsbl()`
 
-**Archive**
-- `board_config.archive_enabled` schema field already present
-- Pruned threads moved to read-only archive store instead of deleted
+**`max_threads` in BoardConfig** ✅ — migration 016; `BoardConfigUpdate` DTO; dashboard config form
+
+**Archive** ✅
+- Migration 015: `archived_threads` table
+- `ArchiveRepository` port + `PgArchiveRepository`; `find_oldest_for_archive` on `ThreadRepository`
+- `ThreadService::with_archive()` + `prune_with_archive(archive_enabled)` archives before hard-delete
+- `PostService::with_archive_repo()` — board-capacity prune at Step 11c
+- `GET /board/:slug/archive` — read-only archived thread list; `[Archive]` link in board nav
 
 ---
 
-## v1.3 — Modern UX & Advanced Auth
+## v1.3 — Modern UX, Advanced Auth & Alternative Storage
 
-**Focus**: Live updates. Client-side quality of life. Two-factor authentication.
+**Focus**: Live updates. Client-side quality of life. Two-factor authentication. Alternative media backends.
 
 **WebSocket Live Updates** (`web-websockets`) — new posts without reload; non-JS clients unaffected
 
@@ -217,6 +260,10 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 **Two-Factor Authentication** (`auth-2fa`) — TOTP for moderator/admin accounts via `TwoFactorProvider` port
 
 **i18n / Localization** — template string extraction; English base; community translations
+
+**Alternative Media Storage**
+- `R2MediaStorage` (`media-r2`) — Cloudflare R2
+- `BackblazeMediaStorage` (`media-backblaze`) — Backblaze B2
 
 ---
 
@@ -228,6 +275,8 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 
 **Alternative Web Framework** (`web-actix`) — all integration tests must pass under both `web-axum` and `web-actix`
 
+**SQLite Backend** (`db-sqlite`) — all repository ports; embedded/serverless deployments
+
 **SurrealDB Backend** (`db-surrealdb`) — full repository port set; third database option
 
 **ML Spam Scoring** — `SpamScorer` port with local ONNX model inference adapter
@@ -238,13 +287,13 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 
 | Port | v1.0 | v1.1 | v1.2 | v1.3 | v2.0 |
 |------|------|------|------|------|------|
-| `BoardRepository` | Postgres ✅ | — | **SQLite** | — | **SurrealDB** |
-| `ThreadRepository` | Postgres ✅ | — | **SQLite** | — | — |
-| `PostRepository` | Postgres ✅ | `find_all_by_thread`, `find_thread_id_by_post_number`, `search_fulltext` ✅ | **SQLite** | — | — |
-| `BanRepository` | Postgres ✅ | — | **SQLite** | — | — |
-| `FlagRepository` | Postgres ✅ | — | **SQLite** | — | — |
-| `AuditRepository` | Postgres ✅ | ✅ find_all/find_by_board | **SQLite** | — | — |
-| `UserRepository` | Postgres ✅ | — | **SQLite** | — | — |
+| `BoardRepository` | Postgres ✅ | — | — | — | **SurrealDB** |
+| `ThreadRepository` | Postgres ✅ | — | — | — | — |
+| `PostRepository` | Postgres ✅ | `find_all_by_thread`, `find_thread_id_by_post_number`, `search_fulltext` ✅ | — | — | — |
+| `BanRepository` | Postgres ✅ | — | — | — | — |
+| `FlagRepository` | Postgres ✅ | — | — | — | — |
+| `AuditRepository` | Postgres ✅ | ✅ find_all/find_by_board | — | — | — |
+| `UserRepository` | Postgres ✅ | — | — | — | — |
 | `StaffRequestRepository` | Noop | ✅ Postgres | — | — | — |
 | `StaffMessageRepository` | — | ✅ Postgres | — | — | — |
 | `SessionRepository` | — | ✅ Postgres (auth-cookie) | — | — | — |
@@ -253,9 +302,10 @@ Moderation actions: delete post/thread, sticky/close threads, IP bans with expir
 | `AuthProvider` | JWT ✅ | ✅ Cookie | — | — | **OIDC** |
 | `RateLimiter` | Redis ✅, Noop | ✅ InMemory | — | — | — |
 | `CaptchaVerifier` | *(schema ready)* | *(v1.1.1)* | — | — | — |
-| `SearchIndex` | *(schema ready)* | ✅ Postgres FTS (basic) | **MeiliSearch, PgFTS** | — | — |
-| `DnsblChecker` | *(planned)* | — | **Spamhaus** | — | — |
+| `SearchIndex` | *(schema ready)* | ✅ Postgres FTS | ✅ HTML view + search form | — | — |
+| `DnsblChecker` | *(planned)* | — | ✅ SpamhausDnsblChecker | — | — |
 | `TripkeyRepository` | — | *(stub)* | **Postgres** | — | — |
+| `ArchiveRepository` | — | — | ✅ PgArchiveRepository | — | — |
 | `FederationSync` | *(planned)* | — | — | — | **ActivityPub** |
 
 ---

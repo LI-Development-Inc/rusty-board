@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Search: {{ query }} — /{{ board.slug }}/{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/board/{{ board.slug }}">/{{ board.slug }}/</a>
+  <a href="/board/{{ board.slug }}/catalog">[catalog]</a>
+{% endblock %}
+
+{% block content %}
+<div class="board-header">
+  <h1>/{{ board.slug }}/ — Search Results</h1>
+  <nav class="board-nav">
+    <a href="/board/{{ board.slug }}">[Index]</a>
+    <a href="/board/{{ board.slug }}/catalog">[Catalog]</a>
+  </nav>
+</div>
+
+<form class="search-form" action="/boards/{{ board.slug }}/search" method="GET">
+  <input type="search" name="q" value="{{ query }}" placeholder="Search posts…" autofocus>
+  <button type="submit">[Search]</button>
+</form>
+
+<hr>
+
+{% if results.is_empty() %}
+<p class="search-empty">No posts matched <strong>{{ query }}</strong> on /{{ board.slug }}/.</p>
+{% else %}
+<p class="search-meta">
+  {{ total }} result{% if total != 1 %}s{% endif %} for <strong>{{ query }}</strong>
+  {% if total_pages > 1 %} — Page {{ current_page }} of {{ total_pages }}{% endif %}
+</p>
+
+<div class="posts search-results">
+  {% for post in results %}
+  <div class="post reply-post search-result" id="post-{{ post.post_number }}">
+    <div class="post-header">
+      <span class="post-name">{% if post.name.is_some() %}{{ post.name.as_ref().unwrap() }}{% else %}Anonymous{% endif %}</span>
+      {% if post.tripcode.is_some() %}
+      <span class="post-tripcode">{{ post.tripcode.as_ref().unwrap() }}</span>
+      {% endif %}
+      <time class="post-date" data-ts="{{ post.created_at.timestamp() }}">{{ post.created_at }}</time>
+      <a class="post-number" href="/board/{{ board.slug }}/thread/{{ post.thread_id }}#post-{{ post.post_number }}">No.{{ post.post_number }}</a>
+      <a class="thread-link" href="/board/{{ board.slug }}/thread/{{ post.thread_id }}">[Open Thread →]</a>
+    </div>
+    <div class="post-body">{{ post.body }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if current_page > 1 %}
+  <a href="/boards/{{ board.slug }}/search?q={{ query }}&page={{ current_page - 1 }}">[← Prev]</a>
+  {% endif %}
+  Page {{ current_page }} of {{ total_pages }}
+  {% if current_page < total_pages %}
+  <a href="/boards/{{ board.slug }}/search?q={{ query }}&page={{ current_page + 1 }}">[Next →]</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

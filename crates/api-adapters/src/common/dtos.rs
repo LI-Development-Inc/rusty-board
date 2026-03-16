@@ -41,6 +41,7 @@ pub struct BoardUpdate {
 pub struct BoardConfigUpdate {
     /// New bump limit. `None` leaves the current value unchanged.
     pub bump_limit:             Option<u32>,
+    pub max_threads:            Option<u32>,
     /// New maximum number of file attachments per post. `None` leaves unchanged.
     pub max_files:              Option<u8>,
     /// New maximum file size in kilobytes. `None` leaves unchanged.
@@ -71,12 +72,19 @@ pub struct BoardConfigUpdate {
     pub captcha_required:       Option<bool>,
     /// Mark the board as NSFW. `None` leaves unchanged.
     pub nsfw:                   Option<bool>,
+    /// Enable full-text search on this board. `None` leaves unchanged.
+    pub search_enabled:         Option<bool>,
+    /// Enable thread archiving (pruned threads are moved to archive). `None` leaves unchanged.
+    pub archive_enabled:        Option<bool>,
+    /// Minimum seconds between posts from the same name/tripcode. `0` disables. `None` leaves unchanged.
+    pub name_rate_limit_window_secs: Option<u32>,
 }
 
 impl BoardConfigUpdate {
     /// Apply only the provided (non-None) fields to an existing `BoardConfig`.
     pub fn apply_to(self, mut config: domains::models::BoardConfig) -> domains::models::BoardConfig {
         if let Some(v) = self.bump_limit             { config.bump_limit = v; }
+        if let Some(v) = self.max_threads            { config.max_threads = v; }
         if let Some(v) = self.max_files              { config.max_files = v; }
         if let Some(v) = self.max_file_size_kb       { config.max_file_size = domains::models::FileSizeKb(v); }
         if let Some(v) = self.allowed_mimes          { config.allowed_mimes = v; }
@@ -92,6 +100,9 @@ impl BoardConfigUpdate {
         if let Some(v) = self.allow_tripcodes        { config.allow_tripcodes = v; }
         if let Some(v) = self.captcha_required       { config.captcha_required = v; }
         if let Some(v) = self.nsfw                   { config.nsfw = v; }
+        if let Some(v) = self.search_enabled         { config.search_enabled = v; }
+        if let Some(v) = self.archive_enabled        { config.archive_enabled = v; }
+        if let Some(v) = self.name_rate_limit_window_secs { config.name_rate_limit_window_secs = v; }
         config
     }
 }

@@ -160,9 +160,10 @@ pub async fn show_thread_html<TR: services::thread::ThreadRepo>(
 
     let tmpl = ThreadTemplate {
         board:       board_ctx.board,
-        thread,
+        thread:      thread.clone(),
         posts,
         is_closed,
+        is_cycle:    thread.cycle,
         viewer_role,
     };
     Ok(tmpl)

@@ -82,6 +82,39 @@ impl IntoResponse for BoardTemplate {
 }
 
 /// Template for the catalog view (`catalog.html`) — grid of thread thumbnails.
+
+/// Template for the board archive view (`archive.html`).
+#[derive(askama::Template)]
+#[template(path = "archive.html")]
+pub struct ArchiveTemplate {
+    /// The board whose archived threads are being displayed.
+    pub board:        domains::models::Board,
+    /// Archived threads, newest-archived first.
+    pub threads:      Vec<domains::models::Thread>,
+    pub current_page: u32,
+    pub total_pages:  u32,
+}
+
+impl axum::response::IntoResponse for ArchiveTemplate {
+    fn into_response(self) -> axum::response::Response { render_template(self) }
+}
+
+/// Template for the search results page (`search_results.html`).
+#[derive(askama::Template)]
+#[template(path = "search_results.html")]
+pub struct SearchResultsTemplate {
+    pub board:        domains::models::Board,
+    pub query:        String,
+    pub results:      Vec<domains::models::Post>,
+    pub total:        u64,
+    pub current_page: u32,
+    pub total_pages:  u32,
+}
+
+impl axum::response::IntoResponse for SearchResultsTemplate {
+    fn into_response(self) -> axum::response::Response { render_template(self) }
+}
+
 #[derive(Template)]
 #[template(path = "catalog.html")]
 pub struct CatalogTemplate {
@@ -101,20 +134,14 @@ impl IntoResponse for CatalogTemplate {
 #[derive(Template)]
 #[template(path = "thread.html")]
 pub struct ThreadTemplate {
-    /// The board this thread belongs to.
     pub board:       Board,
-    /// The thread being rendered.
     pub thread:      Thread,
-    /// All posts in the thread with per-thread poster ID badges and attachments.
-    /// Threads show every post up to the bump limit — no pagination.
     pub posts:       Vec<PostDisplay>,
-    /// Whether the thread is closed to new replies.
     pub is_closed:   bool,
-    /// Role string for the viewing staff member, e.g. `"janitor"`.
-    /// `None` for anonymous visitors and registered users without moderation rights.
+    /// Whether the thread is in cycle mode (oldest unpinned reply pruned when full).
+    pub is_cycle:    bool,
     pub viewer_role: Option<String>,
 }
-
 impl IntoResponse for ThreadTemplate {
     fn into_response(self) -> Response { render_template(self) }
 }

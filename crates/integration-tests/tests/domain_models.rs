@@ -196,6 +196,36 @@ fn board_config_default_future_flags_off() {
     assert!(!cfg.federation_enabled);
 }
 
+#[test]
+fn board_config_default_max_threads() {
+    let cfg = BoardConfig::default();
+    assert_eq!(cfg.max_threads, 200);
+    assert_eq!(cfg.bump_limit, 500);
+    // Confirm they are independent
+    assert_ne!(cfg.max_threads, cfg.bump_limit);
+}
+
+#[test]
+fn thread_cycle_field_defaults_false() {
+    use domains::models::{Thread, ThreadId, BoardId};
+    use chrono::Utc;
+    use uuid::Uuid;
+    let t = Thread {
+        id:          ThreadId(Uuid::new_v4()),
+        board_id:    BoardId(Uuid::new_v4()),
+        op_post_id:  None,
+        reply_count: 0,
+        bumped_at:   Utc::now(),
+        sticky:      false,
+        closed:      false,
+        cycle:       false,
+        created_at:  Utc::now(),
+    };
+    assert!(!t.cycle);
+    assert!(!t.sticky);
+    assert!(!t.closed);
+}
+
 // ─── CurrentUser ─────────────────────────────────────────────────────────────
 
 #[test]

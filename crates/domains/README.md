@@ -17,8 +17,8 @@ The innermost crate. Everything else depends on this. Nothing here depends on an
 | Type | Description |
 |------|-------------|
 | `Board` | An imageboard board (`/b/`, `/tech/`, etc.) |
-| `Thread` | A thread within a board, with sticky/closed state |
-| `Post` | An anonymous post; contains `IpHash`, never raw IP |
+| `Thread` | A thread within a board; sticky/closed/cycle state |
+| `Post` | An anonymous post; contains `IpHash`, never raw IP; `pinned` flag for cycle threads |
 | `Attachment` | Media file metadata (stored separately in `MediaStorage`) |
 | `Ban` | IP ban with optional expiry |
 | `Flag` | User report against a post, pending staff review |
@@ -53,6 +53,8 @@ All ID types wrap `Uuid` with a `::new()` constructor and implement `Display`, `
 | `SessionRepository` | `CookieAuthProvider` | `InMemorySessionRepository`, `PgSessionRepository` |
 | `StaffRequestRepository` | `StaffRequestService` | `PgStaffRequestRepository` |
 | `StaffMessageRepository` | `StaffMessageService` | `PgStaffMessageRepository` |
+| `DnsblChecker` | `PostService` | `SpamhausDnsblChecker` (`spam-dnsbl`), `NoopDnsblChecker` |
+| `ArchiveRepository` | `ThreadService`, `PostService` | `PgArchiveRepository`, `NoopArchiveRepository` |
 
 ### Roles
 
@@ -98,9 +100,9 @@ See `docs/CONVENTIONS.md` for the full port addition checklist.
 
 ---
 
-## v1.1 Status
+## v1.2 Status — Complete
 
-- All 5 roles and the full `BoardConfig` field set are shipped
-- `CurrentUser` context with `can_delete()`, `can_moderate()`, `can_manage_board_config()` permission methods
-- `StaffRequest`, `StaffMessage`, `Session` models all present
-- TODO v1.2: `Thread::cycle` field and `Post::pinned` field (stubs with `// pub` comments in `models.rs`)
+- `Thread::cycle`, `Post::pinned` (migration 014), `AuditAction::CycleThread/PinPost`
+- `DnsblChecker` port + `SpamhausDnsblChecker` adapter
+- `ArchiveRepository` port + `PgArchiveRepository` (migration 015)
+- `ThreadRepository::find_oldest_for_archive`, `PostRepository::find_attachment_by_hash`, `set_pinned`, etc.

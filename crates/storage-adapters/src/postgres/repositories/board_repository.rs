@@ -52,6 +52,7 @@ fn board_from_row(r: BoardRow) -> Result<Board, DomainError> {
 #[derive(sqlx::FromRow)]
 struct BoardConfigRow {
     bump_limit:             i32,
+    max_threads:            i32,
     max_files:              i16,
     max_file_size_kb:       i32,
     allowed_mimes:          Vec<String>,
@@ -77,6 +78,7 @@ struct BoardConfigRow {
 fn board_config_from_row(r: BoardConfigRow) -> BoardConfig {
     BoardConfig {
         bump_limit:             r.bump_limit as u32,
+        max_threads:            r.max_threads as u32,
         max_files:              r.max_files as u8,
         max_file_size:          FileSizeKb(r.max_file_size_kb as u32),
         allowed_mimes:          r.allowed_mimes,
@@ -211,7 +213,7 @@ impl BoardRepository for PgBoardRepository {
     #[instrument(skip(self), fields(board_id = %board_id))]
     async fn find_config(&self, board_id: BoardId) -> Result<BoardConfig, DomainError> {
         let row = sqlx::query_as::<_, BoardConfigRow>(
-            "SELECT bump_limit, max_files, max_file_size_kb, allowed_mimes, max_post_length,
+            "SELECT bump_limit, max_threads, max_files, max_file_size_kb, allowed_mimes, max_post_length,
                     rate_limit_enabled, rate_limit_window_secs, rate_limit_posts,
                     spam_filter_enabled, spam_score_threshold, duplicate_check,
                     forced_anon, allow_sage, allow_tripcodes, captcha_required, nsfw,
@@ -229,15 +231,16 @@ impl BoardRepository for PgBoardRepository {
     async fn save_config(&self, board_id: BoardId, config: &BoardConfig) -> Result<(), DomainError> {
         sqlx::query(
             "INSERT INTO board_configs (
-                board_id, bump_limit, max_files, max_file_size_kb, allowed_mimes,
+                board_id, bump_limit, max_threads, max_files, max_file_size_kb, allowed_mimes,
                 max_post_length, rate_limit_enabled, rate_limit_window_secs, rate_limit_posts,
                 spam_filter_enabled, spam_score_threshold, duplicate_check,
                 forced_anon, allow_sage, allow_tripcodes, captcha_required, nsfw,
                 search_enabled, archive_enabled, federation_enabled,
                 link_blacklist, name_rate_limit_window_secs
-             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
              ON CONFLICT (board_id) DO UPDATE SET
                 bump_limit = EXCLUDED.bump_limit,
+                max_threads = EXCLUDED.max_threads,
                 max_files = EXCLUDED.max_files,
                 max_file_size_kb = EXCLUDED.max_file_size_kb,
                 allowed_mimes = EXCLUDED.allowed_mimes,
@@ -261,6 +264,7 @@ impl BoardRepository for PgBoardRepository {
         )
         .bind(board_id.0)
         .bind(config.bump_limit as i32)
+        .bind(config.max_threads as i32)
         .bind(config.max_files as i16)
         .bind(config.max_file_size.0 as i32)
         .bind(&config.allowed_mimes)

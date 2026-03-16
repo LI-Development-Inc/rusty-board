@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}/{{ board.slug }}/ — Archive{% endblock %}
+
+{% block nav_boards %}
+  <span class="nav-sep">|</span>
+  <a href="/board/{{ board.slug }}">/{{ board.slug }}/</a>
+  <a href="/board/{{ board.slug }}/catalog">[catalog]</a>
+{% endblock %}
+
+{% block content %}
+<div class="board-header">
+  <h1>/{{ board.slug }}/ — Thread Archive</h1>
+  <p class="board-rules-text" style="color:var(--color-muted);font-size:.9em">
+    Threads are archived here when the board reaches its thread limit.
+    Archived threads are read-only.
+  </p>
+  <nav class="board-nav">
+    <a href="/board/{{ board.slug }}">[Index]</a>
+    <a href="/board/{{ board.slug }}/catalog">[Catalog]</a>
+    <a href="/board/{{ board.slug }}/archive">[Archive]</a>
+  </nav>
+</div>
+
+<hr>
+
+{% if threads.is_empty() %}
+<p style="color:var(--color-muted);padding:1rem 0">No archived threads yet.</p>
+{% else %}
+<div class="posts">
+  {% for thread in threads %}
+  <div class="thread" id="thread-{{ thread.id }}">
+    <div class="thread-op">
+      <div class="post-header">
+        <span class="post-name">Anonymous</span>
+        <time class="post-date" data-ts="{{ thread.bumped_at.timestamp() }}">{{ thread.bumped_at }}</time>
+        <a class="post-number" href="/board/{{ board.slug }}/thread/{{ thread.id }}">No.{{ thread.id }}</a>
+        <span class="tag closed">[ARCHIVED]</span>
+      </div>
+      <div class="thread-footer">
+        <span class="reply-count">{{ thread.reply_count }} repl{% if thread.reply_count == 1 %}y{% else %}ies{% endif %}</span>
+        — <a href="/board/{{ board.slug }}/thread/{{ thread.id }}">[View Thread →]</a>
+      </div>
+    </div>
+  </div>
+  <hr class="thread-sep">
+  {% endfor %}
+</div>
+
+<div class="pagination">
+  {% if current_page > 1 %}
+  <a href="/board/{{ board.slug }}/archive?page={{ current_page - 1 }}">[← Prev]</a>
+  {% endif %}
+  Page {{ current_page }} of {{ total_pages }}
+  {% if current_page < total_pages %}
+  <a href="/board/{{ board.slug }}/archive?page={{ current_page + 1 }}">[Next →]</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

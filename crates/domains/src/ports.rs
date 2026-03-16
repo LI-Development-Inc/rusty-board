@@ -148,6 +148,21 @@ pub trait ThreadRepository: Send + Sync + 'static {
     /// Set the closed flag to `closed` for the given thread.
     async fn set_closed(&self, id: ThreadId, closed: bool) -> Result<(), DomainError>;
 
+    /// Set the cycle flag for the given thread (v1.2).
+    ///
+    /// When `cycle=true` and a new reply would exceed the bump limit, the oldest
+    /// unpinned post is pruned instead of the thread being closed.
+    async fn set_cycle(&self, id: ThreadId, cycle: bool) -> Result<(), DomainError>;
+
+    /// Return up to `limit` oldest non-sticky threads for a board (by `bumped_at ASC`).
+    ///
+    /// Used by archive-enabled pruning: threads are copied to the archive before deletion.
+    async fn find_oldest_for_archive(
+        &self,
+        board_id: BoardId,
+        limit: u32,
+    ) -> Result<Vec<Thread>, DomainError>;
+
     /// Count threads on a board (used to determine whether pruning is necessary).
     async fn count_by_board(&self, board_id: BoardId) -> Result<u32, DomainError>;
 
@@ -262,6 +277,32 @@ pub trait PostRepository: Send + Sync + 'static {
         board_id: crate::models::BoardId,
         post_number: u64,
     ) -> Result<Option<ThreadId>, DomainError>;
+
+    /// Set the `pinned` flag on a post (v1.2 — cycle mode).
+    ///
+    /// Pinned posts are never pruned during cycle rotation.
+    async fn set_pinned(&self, id: PostId, pinned: bool) -> Result<(), DomainError>;
+
+    /// Return the oldest non-OP, non-pinned post in a thread by `post_number ASC`.
+    ///
+    /// Returns `None` when every reply is pinned or the thread has no replies.
+    /// Used by cycle-mode pruning in `PostService::create_post`.
+    async fn find_oldest_unpinned_reply(
+        &self,
+        thread_id: ThreadId,
+    ) -> Result<Option<PostId>, DomainError>;
+
+    /// Look up an existing attachment by its SHA-256 content hash (v1.2 — deduplication).
+    ///
+    /// When a matching attachment is found the caller can reuse its `media_key` and
+    /// `thumbnail_key` instead of re-uploading the identical file.
+    async fn find_attachment_by_hash(
+        &self,
+        hash: &crate::models::ContentHash,
+    ) -> Result<Option<crate::models::Attachment>, DomainError>;
+
+    /// Delete a single post by ID. Caller is responsible for cascade logic.
+    async fn delete_by_id(&self, id: PostId) -> Result<(), DomainError>;
 }
 
 /// Persistence boundary for `Ban` records.
@@ -723,4 +764,55 @@ pub trait StaffMessageRepository: Send + Sync + 'static {
     /// Returns the number of messages deleted. Called by a periodic maintenance task
     /// or on-demand from an admin endpoint. Use `14` for the standard expiry window.
     async fn delete_expired(&self, older_than_days: u32) -> Result<u32, DomainError>;
+}
+
+/// DNSBL (DNS Block List) checking boundary.
+///
+/// Checks whether a given IPv4 address appears in a configured block list.
+/// The implementation performs a DNS A-record lookup of the reversed IP address
+/// against the DNSBL zone (e.g. `1.2.3.4` → `4.3.2.1.zen.spamhaus.org`).
+///
+/// **Fail-open**: all implementations must return `Ok(false)` on DNS timeout
+/// or lookup failure rather than blocking the post. A degraded DNSBL service
+/// must never prevent legitimate posting.
+///
+/// Enabled via the `spam-dnsbl` feature flag; the composition root wires the
+/// `NoopDnsblChecker` (always returns `false`) when the feature is disabled.
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
+#[async_trait]
+pub trait DnsblChecker: Send + Sync + 'static {
+    /// Returns `true` if `ip` is listed in the DNSBL, `false` otherwise.
+    ///
+    /// Must never return `Err` — callers treat `Err` the same as `Ok(false)`.
+    async fn is_blocked(&self, ip: &str) -> Result<bool, DomainError>;
+}
+
+/// Archive store for pruned threads.
+///
+/// When `board_config.archive_enabled` is true, `ThreadService::prune_if_needed`
+/// writes pruned threads here instead of deleting them.  Archived threads are
+/// read-only (the posts remain in the `posts` table but the thread row is in
+/// `archived_threads`, so no new replies can be added).
+///
+/// The composition root wires `PgArchiveRepository`; a `NoopArchiveRepository`
+/// is used when archiving is not configured.
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
+#[async_trait]
+pub trait ArchiveRepository: Send + Sync + 'static {
+    /// Copy a thread to the archive, then return its ID for the caller to
+    /// delete from the live `threads` table.
+    ///
+    /// The implementation should be idempotent — archiving the same thread ID
+    /// twice must not error.
+    async fn archive_thread(
+        &self,
+        thread: &crate::models::Thread,
+    ) -> Result<(), DomainError>;
+
+    /// Paginated list of archived threads for a board, newest-archived first.
+    async fn find_archived(
+        &self,
+        board_id: crate::models::BoardId,
+        page: crate::models::Page,
+    ) -> Result<crate::models::Paginated<crate::models::Thread>, DomainError>;
 }

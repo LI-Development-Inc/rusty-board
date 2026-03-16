@@ -151,12 +151,16 @@ impl domains::ports::PostRepository for NopPostRepo {
     async fn search_fulltext(&self, _: BoardId, _: &str, p: Page) -> Result<Paginated<Post>, domains::errors::DomainError> { Ok(Paginated::new(vec![], 0, p, 15)) }
     async fn find_all_by_thread(&self, _: ThreadId) -> Result<Vec<Post>, domains::errors::DomainError> { Ok(vec![]) }
     async fn find_thread_id_by_post_number(&self, _: BoardId, _: u64) -> Result<Option<domains::models::ThreadId>, domains::errors::DomainError> { Ok(None) }
+    async fn set_pinned(&self, _: domains::models::PostId, _: bool) -> Result<(), domains::errors::DomainError> { Ok(()) }
+    async fn find_oldest_unpinned_reply(&self, _: domains::models::ThreadId) -> Result<Option<domains::models::PostId>, domains::errors::DomainError> { Ok(None) }
+    async fn find_attachment_by_hash(&self, _: &domains::models::ContentHash) -> Result<Option<domains::models::Attachment>, domains::errors::DomainError> { Ok(None) }
+    async fn delete_by_id(&self, _: domains::models::PostId) -> Result<(), domains::errors::DomainError> { Ok(()) }
 }
 
 // ─── Router factory helpers ───────────────────────────────────────────────────
 
 fn board_public_router(repo: impl BoardRepo) -> Router {
-    api_adapters::axum::routes::board_routes::board_public_routes(Arc::new(repo), NopPostRepo)
+    api_adapters::axum::routes::board_routes::board_public_routes(Arc::new(repo), NopPostRepo, std::sync::Arc::new(NopArchiveRepo::default()))
 }
 
 fn json_get(uri: &str) -> Request<Body> {
@@ -169,6 +173,16 @@ fn json_get(uri: &str) -> Request<Body> {
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Default)]
+struct NopArchiveRepo;
+#[async_trait::async_trait]
+impl domains::ports::ArchiveRepository for NopArchiveRepo {
+    async fn archive_thread(&self, _: &domains::models::Thread) -> Result<(), domains::errors::DomainError> { Ok(()) }
+    async fn find_archived(&self, _: domains::models::BoardId, p: domains::models::Page) -> Result<domains::models::Paginated<domains::models::Thread>, domains::errors::DomainError> {
+        Ok(domains::models::Paginated::new(vec![], 0, p, 15))
+    }
+}
 
 #[tokio::test]
 async fn get_boards_returns_200_with_list() {

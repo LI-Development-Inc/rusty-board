@@ -141,3 +141,20 @@ where
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
+
+/// `GET /staff/messages/unread` — unread message count for the nav badge.
+///
+/// Returns `{ "count": N }`. Called by the base template JS immediately after
+/// `/auth/me` confirms a staff session. Returns `0` for non-staff users
+/// (they are rejected by `StaffUser` extractor → `403`, which the JS treats as 0).
+pub async fn unread_count<MR>(
+    State(s): State<StaffMessageState<MR>>,
+    StaffUser(current): StaffUser,
+) -> Result<impl IntoResponse, ApiError>
+where
+    MR: domains::ports::StaffMessageRepository,
+{
+    let count = s.svc.unread_count(current.id).await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(serde_json::json!({ "count": count })))
+}

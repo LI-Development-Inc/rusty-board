@@ -1,5 +1,6 @@
 //! PostgreSQL implementations of all domain repository ports.
 
+pub mod archive_repository;
 pub mod audit_repository;
 pub mod ban_repository;
 pub mod board_repository;

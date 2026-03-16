@@ -38,6 +38,7 @@ struct PostRow {
     email:       Option<String>,
     created_at:  DateTime<Utc>,
     post_number: i64,
+    pinned:      bool,
 }
 
 fn post_from_row(r: PostRow) -> Post {
@@ -51,6 +52,7 @@ fn post_from_row(r: PostRow) -> Post {
         email:       r.email,
         created_at:  r.created_at,
         post_number: r.post_number as u64,
+        pinned:      r.pinned,
     }
 }
 
@@ -58,7 +60,7 @@ fn post_from_row(r: PostRow) -> Post {
 impl PostRepository for PgPostRepository {
     async fn find_by_id(&self, id: PostId) -> Result<Post, DomainError> {
         let row = sqlx::query_as::<_, PostRow>(
-            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number \
+            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number, pinned \
              FROM posts WHERE id = $1"
         )
         .bind(id.0)
@@ -74,7 +76,7 @@ impl PostRepository for PgPostRepository {
         let limit  = page_size as i64;
 
         let rows = sqlx::query_as::<_, PostRow>(
-            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number \
+            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number, pinned \
              FROM posts WHERE thread_id = $1 \
              ORDER BY post_number ASC LIMIT $2 OFFSET $3"
         )
@@ -99,7 +101,7 @@ impl PostRepository for PgPostRepository {
 
     async fn find_by_ip_hash(&self, ip_hash: &IpHash) -> Result<Vec<Post>, DomainError> {
         let rows = sqlx::query_as::<_, PostRow>(
-            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number \
+            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number, pinned \
              FROM posts WHERE ip_hash = $1 ORDER BY created_at DESC"
         )
         .bind(&ip_hash.0)
@@ -135,8 +137,6 @@ impl PostRepository for PgPostRepository {
     }
 
     async fn save(&self, post: &Post) -> Result<(PostId, u64), DomainError> {
-        // Atomically claim the next post number for this board, then insert.
-        // The CTE ensures both operations succeed or both roll back.
         let row: (Uuid, i64) = sqlx::query_as(
             "WITH board_cte AS (
                  SELECT t.board_id FROM threads t WHERE t.id = $2
@@ -147,8 +147,8 @@ impl PostRepository for PgPostRepository {
                  WHERE  id = (SELECT board_id FROM board_cte)
                  RETURNING post_counter
              )
-             INSERT INTO posts (id, thread_id, post_number, body, ip_hash, name, tripcode, email, created_at)
-             SELECT $1, $2, bump.post_counter, $3, $4, $5, $6, $7, $8
+             INSERT INTO posts (id, thread_id, post_number, body, ip_hash, name, tripcode, email, pinned, created_at)
+             SELECT $1, $2, bump.post_counter, $3, $4, $5, $6, $7, $8, $9
              FROM   bump
              RETURNING id, post_number"
         )
@@ -159,6 +159,7 @@ impl PostRepository for PgPostRepository {
         .bind(&post.name)
         .bind(&post.tripcode)
         .bind(&post.email)
+        .bind(post.pinned)
         .bind(post.created_at)
         .fetch_one(&self.pool)
         .await
@@ -369,10 +370,8 @@ impl PostRepository for PgPostRepository {
     }
 
     async fn find_all_by_thread(&self, thread_id: ThreadId) -> Result<Vec<Post>, DomainError> {
-        // Loads up to 500 posts — the maximum bump limit. Thread view shows all posts
-        // without pagination, so we cap at bump_limit max rather than paginating.
         let rows = sqlx::query_as::<_, PostRow>(
-            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number
+            "SELECT id, thread_id, body, ip_hash, name, tripcode, email, created_at, post_number, pinned
              FROM   posts
              WHERE  thread_id = $1
              ORDER  BY post_number ASC
@@ -408,5 +407,85 @@ impl PostRepository for PgPostRepository {
         .map_err(|e| DomainError::internal(e.to_string()))?;
 
         Ok(row.map(|(id,)| ThreadId(id)))
+    }
+
+    async fn set_pinned(&self, id: PostId, pinned: bool) -> Result<(), DomainError> {
+        sqlx::query("UPDATE posts SET pinned = $2 WHERE id = $1")
+            .bind(id.0)
+            .bind(pinned)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+        Ok(())
+    }
+
+    async fn find_oldest_unpinned_reply(
+        &self,
+        thread_id: ThreadId,
+    ) -> Result<Option<PostId>, DomainError> {
+        // Returns the OP-excluded, non-pinned reply with the smallest post_number.
+        // The OP is the post with the minimum post_number in the thread.
+        let row: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM posts
+             WHERE  thread_id = $1
+               AND  pinned = FALSE
+               AND  post_number > (
+                   SELECT MIN(post_number) FROM posts WHERE thread_id = $1
+               )
+             ORDER  BY post_number ASC
+             LIMIT  1",
+        )
+        .bind(thread_id.0)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| DomainError::internal(e.to_string()))?;
+        Ok(row.map(|(id,)| PostId(id)))
+    }
+
+    async fn find_attachment_by_hash(
+        &self,
+        hash: &domains::models::ContentHash,
+    ) -> Result<Option<domains::models::Attachment>, DomainError> {
+        #[derive(sqlx::FromRow)]
+        struct AttRow {
+            id:            uuid::Uuid,
+            post_id:       uuid::Uuid,
+            filename:      String,
+            mime:          String,
+            hash:          String,
+            size_kb:       i32,
+            media_key:     String,
+            thumbnail_key: Option<String>,
+            spoiler:       bool,
+        }
+        let row = sqlx::query_as::<_, AttRow>(
+            "SELECT id, post_id, filename, mime, hash, size_kb, media_key, thumbnail_key, spoiler
+             FROM attachments WHERE hash = $1 LIMIT 1",
+        )
+        .bind(&hash.0)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| DomainError::internal(e.to_string()))?;
+
+        Ok(row.map(|r| domains::models::Attachment {
+            id:            r.id,
+            post_id:       PostId(r.post_id),
+            filename:      r.filename,
+            mime:          r.mime,
+            hash:          domains::models::ContentHash(r.hash),
+            size_kb:       r.size_kb as u32,
+            media_key:     domains::models::MediaKey::new(r.media_key),
+            thumbnail_key: r.thumbnail_key.map(domains::models::MediaKey::new),
+            spoiler:       r.spoiler,
+        }))
+    }
+
+    async fn delete_by_id(&self, id: PostId) -> Result<(), DomainError> {
+        sqlx::query("DELETE FROM posts WHERE id = $1")
+            .bind(id.0)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+        Ok(())
     }
 }

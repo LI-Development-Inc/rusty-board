@@ -29,6 +29,7 @@ where
     Router::new()
         .route("/staff/messages",           get(staff_message_handlers::inbox::<MR>)
                                                .post(staff_message_handlers::send_message::<MR>))
+        .route("/staff/messages/unread",    get(staff_message_handlers::unread_count::<MR>))
         .route("/staff/messages/new",        get(staff_message_handlers::compose_page))
         .route("/staff/messages/{id}/read", post(staff_message_handlers::mark_read::<MR>))
         .route("/staff/messages/purge",     post(staff_message_handlers::purge_expired::<MR>))

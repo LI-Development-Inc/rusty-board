@@ -15,7 +15,7 @@
 use chrono::Utc;
 use domains::{
     models::{
-        BanId, BoardId, BoardConfig, IpHash, Thread, ThreadId, UserId,
+        BanId, BoardId, BoardConfig, IpHash, PostId, Thread, ThreadId, UserId,
     },
     ports::{
         MockBanRepository, MockMediaProcessor, MockMediaStorage, MockPostRepository,
@@ -59,6 +59,7 @@ fn text_draft(board_id: BoardId, thread_id: Option<ThreadId>) -> PostDraft {
         thread_id,
         body:        "Hello, board!".to_owned(),
         ip_hash:     IpHash::new("192.168.0.1"),
+        raw_ip:  None,
         name:        None,
         email:       None,
         files:       vec![],
@@ -75,7 +76,7 @@ fn open_thread(board_id: BoardId, thread_id: ThreadId) -> Thread {
         reply_count: 0,
         bumped_at:   Utc::now(),
         sticky:      false,
-        closed:      false,
+        closed:      false, cycle: false,
         created_at:  Utc::now(),
     }
 }
@@ -408,7 +409,7 @@ async fn reply_at_bump_limit_does_not_bump() {
             reply_count: 200, // at or beyond bump_limit
             bumped_at:   Utc::now(),
             sticky:      false,
-            closed:      false,
+            closed:      false, cycle: false,
             created_at:  Utc::now(),
         })
     });
@@ -538,4 +539,107 @@ async fn post_repo_error_propagates() {
 
     let result = svc.create_post(text_draft(board_id, None), &permissive_config()).await;
     assert!(result.is_err(), "repo error must propagate");
+}
+
+// ── v1.2 feature tests ───────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn cycle_thread_prunes_oldest_unpinned_reply_when_past_bump_limit() {
+    // When thread.cycle = true AND reply_count >= bump_limit, create_post must call
+    // find_oldest_unpinned_reply and then delete_by_id on the result.
+    let board_id  = BoardId::new();
+    let thread_id = ThreadId::new();
+
+    let mut thread_mock = MockThreadRepository::new();
+    let cycle_thread = Thread {
+        reply_count: 500, // at bump limit
+        cycle: true,
+        closed: false,
+        ..open_thread(board_id, thread_id)
+    };
+    thread_mock.expect_find_by_id()
+        .returning(move |_| Ok(cycle_thread.clone()));
+    let oldest_id = PostId::new();
+    let mut post_mock = MockPostRepository::new();
+    post_mock.expect_find_recent_hashes().returning(|_, _| Ok(vec![]));
+    post_mock.expect_save().returning(|_| Ok((PostId::new(), 1u64)));
+    post_mock.expect_save_attachments().returning(|_| Ok(()));
+    post_mock.expect_find_oldest_unpinned_reply()
+        .times(1)
+        .returning(move |_| Ok(Some(oldest_id)));
+    post_mock.expect_delete_by_id()
+        .times(1)
+        .returning(|_| Ok(()));
+
+    let mut ban_mock = MockBanRepository::new();
+    ban_mock.expect_find_active_by_ip().returning(|_| Ok(None));
+
+    let svc = make_service(post_mock, thread_mock, ban_mock,
+        MockMediaStorage::new(), MockRateLimiter::new(), MockMediaProcessor::new());
+
+    let mut cfg = permissive_config();
+    cfg.bump_limit = 500;
+    let result = svc.create_post(text_draft(board_id, Some(thread_id)), &cfg).await;
+    assert!(result.is_ok(), "cycle post should succeed");
+}
+
+#[tokio::test]
+async fn file_deduplication_reuses_existing_attachment_on_hash_match() {
+    // When find_attachment_by_hash returns Some, PostService must reuse keys
+    // and skip calling MediaStorage::store.
+    let board_id  = BoardId::new();
+    let thread_id = ThreadId::new();
+
+    let mut thread_mock = MockThreadRepository::new();
+    thread_mock.expect_find_by_id()
+        .returning(move |_| Ok(open_thread(board_id, thread_id)));
+
+    let mut post_mock = MockPostRepository::new();
+    post_mock.expect_find_recent_hashes().returning(|_, _| Ok(vec![]));
+    post_mock.expect_save().returning(|_| Ok((PostId::new(), 1u64)));
+    post_mock.expect_save_attachments().returning(|_| Ok(()));
+    // Hash lookup returns an existing attachment — store must NOT be called
+    post_mock.expect_find_attachment_by_hash()
+        .returning(|_| Ok(Some(domains::models::Attachment {
+            id:            uuid::Uuid::new_v4(),
+            post_id:       PostId::new(),
+            filename:      "existing.jpg".into(),
+            mime:          "image/jpeg".into(),
+            hash:          domains::models::ContentHash("abc".into()),
+            size_kb:       100,
+            media_key:     domains::models::MediaKey("existing-key".into()),
+            thumbnail_key: Some(domains::models::MediaKey("existing-thumb".into())),
+            spoiler:       false,
+        })));
+
+    let mut ban_mock = MockBanRepository::new();
+    ban_mock.expect_find_active_by_ip().returning(|_| Ok(None));
+
+    let mut media_mock = MockMediaStorage::new();
+    // store must NOT be called — dedup should skip the upload
+    media_mock.expect_store().times(0);
+
+    let mut processor_mock = MockMediaProcessor::new();
+    processor_mock.expect_process()
+        .returning(|_| Ok(domains::ports::ProcessedMedia {
+            original_key:   domains::models::MediaKey("processed-key".into()),
+            original_data:  bytes::Bytes::from(vec![0u8; 10]),
+            thumbnail_key:  None,
+            thumbnail_data: None,
+            hash:           domains::models::ContentHash("abc".into()),
+            size_kb:        100,
+        }));
+
+    let svc = make_service(post_mock, thread_mock, ban_mock,
+        media_mock, MockRateLimiter::new(), processor_mock);
+
+    let mut draft = text_draft(board_id, Some(thread_id));
+    draft.files = vec![domains::ports::RawMedia {
+        filename: "test.jpg".into(),
+        mime:     mime::IMAGE_JPEG,
+        data:     bytes::Bytes::from(vec![0u8; 10]),
+    }];
+
+    let result = svc.create_post(draft, &permissive_config()).await;
+    assert!(result.is_ok(), "dedup post should succeed without re-uploading");
 }

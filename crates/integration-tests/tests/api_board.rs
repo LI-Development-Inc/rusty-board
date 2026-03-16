@@ -130,6 +130,10 @@ impl domains::ports::PostRepository for NopPostRepo {
     async fn search_fulltext(&self, _: BoardId, _: &str, p: Page) -> Result<Paginated<Post>, domains::errors::DomainError> { Ok(Paginated::new(vec![], 0, p, 15)) }
     async fn find_all_by_thread(&self, _: ThreadId) -> Result<Vec<Post>, domains::errors::DomainError> { Ok(vec![]) }
     async fn find_thread_id_by_post_number(&self, _: BoardId, _: u64) -> Result<Option<domains::models::ThreadId>, domains::errors::DomainError> { Ok(None) }
+    async fn set_pinned(&self, _: domains::models::PostId, _: bool) -> Result<(), domains::errors::DomainError> { Ok(()) }
+    async fn find_oldest_unpinned_reply(&self, _: domains::models::ThreadId) -> Result<Option<domains::models::PostId>, domains::errors::DomainError> { Ok(None) }
+    async fn find_attachment_by_hash(&self, _: &domains::models::ContentHash) -> Result<Option<domains::models::Attachment>, domains::errors::DomainError> { Ok(None) }
+    async fn delete_by_id(&self, _: domains::models::PostId) -> Result<(), domains::errors::DomainError> { Ok(()) }
 }
 
 // ─── Helper: inject admin CurrentUser into a request ─────────────────────────
@@ -184,9 +188,19 @@ fn delete_req(uri: &str) -> Request<Body> {
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 
+#[derive(Clone, Default)]
+struct NopArchiveRepo;
+#[async_trait::async_trait]
+impl domains::ports::ArchiveRepository for NopArchiveRepo {
+    async fn archive_thread(&self, _: &domains::models::Thread) -> Result<(), domains::errors::DomainError> { Ok(()) }
+    async fn find_archived(&self, _: domains::models::BoardId, p: domains::models::Page) -> Result<domains::models::Paginated<domains::models::Thread>, domains::errors::DomainError> {
+        Ok(domains::models::Paginated::new(vec![], 0, p, 15))
+    }
+}
+
 #[tokio::test]
 async fn list_boards_returns_200_with_page() {
-    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("tech")), NopPostRepo);
+    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("tech")), NopPostRepo, std::sync::Arc::new(NopArchiveRepo::default()));
     let resp = app.oneshot(get("/boards")).await.unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
@@ -198,7 +212,7 @@ async fn list_boards_returns_200_with_page() {
 
 #[tokio::test]
 async fn list_boards_returns_empty_page_when_no_boards() {
-    let app = board_public_routes(Arc::new(NotFoundBoardRepo), NopPostRepo);
+    let app = board_public_routes(Arc::new(NotFoundBoardRepo), NopPostRepo, std::sync::Arc::new(NopArchiveRepo::default()));
     let resp = app.oneshot(get("/boards")).await.unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
@@ -210,7 +224,7 @@ async fn list_boards_returns_empty_page_when_no_boards() {
 
 #[tokio::test]
 async fn get_board_by_slug_returns_200_for_existing() {
-    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("b")), NopPostRepo);
+    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("b")), NopPostRepo, std::sync::Arc::new(NopArchiveRepo::default()));
     let resp = app.oneshot(get("/boards/b")).await.unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
@@ -221,7 +235,7 @@ async fn get_board_by_slug_returns_200_for_existing() {
 
 #[tokio::test]
 async fn get_board_by_slug_returns_404_for_missing() {
-    let app = board_public_routes(Arc::new(NotFoundBoardRepo), NopPostRepo);
+    let app = board_public_routes(Arc::new(NotFoundBoardRepo), NopPostRepo, std::sync::Arc::new(NopArchiveRepo::default()));
     let resp = app.oneshot(get("/boards/nobody")).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
@@ -313,7 +327,7 @@ impl Tap for Board {}
 #[tokio::test]
 async fn search_returns_403_when_disabled() {
     // BoardConfig::default() has search_enabled = false
-    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("tech")), NopPostRepo);
+    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("tech")), NopPostRepo, std::sync::Arc::new(NopArchiveRepo::default()));
     let resp = app
         .oneshot(
             axum::http::Request::builder()
@@ -330,7 +344,7 @@ async fn search_returns_403_when_disabled() {
 
 #[tokio::test]
 async fn search_returns_400_when_query_empty() {
-    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("tech")), NopPostRepo);
+    let app = board_public_routes(Arc::new(OkBoardRepo::for_slug("tech")), NopPostRepo, std::sync::Arc::new(NopArchiveRepo::default()));
     let resp = app
         .oneshot(
             axum::http::Request::builder()

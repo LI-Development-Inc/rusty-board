@@ -69,6 +69,8 @@ impl ThreadRepository for NopThread {
             bumped_at:   Utc::now(),
             sticky:      false,
             closed:      false,
+            cycle:  false,
+                    cycle:       false,
             created_at:  Utc::now(),
         })
     }

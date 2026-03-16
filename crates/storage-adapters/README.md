@@ -32,6 +32,7 @@ src/
 │       ├── post_repository.rs          # PgPostRepository
 │       ├── ban_repository.rs           # PgBanRepository
 │       ├── flag_repository.rs          # PgFlagRepository
+│       ├── archive_repository.rs       # PgArchiveRepository + NoopArchiveRepository (v1.2)
 │       ├── audit_repository.rs         # PgAuditRepository
 │       ├── user_repository.rs          # PgUserRepository
 │       ├── staff_request_repository.rs # PgStaffRequestRepository (v1.1)
@@ -66,10 +67,13 @@ src/
     ├── 010_create_audit_logs.sql
     ├── 011_create_staff_requests.sql
     ├── 012_create_staff_messages.sql
-    └── 013_create_user_sessions.sql
+    ├── 013_create_user_sessions.sql
+    ├── 014_cycle_and_dedup.sql     # cycle on threads, pinned on posts, hash index on attachments
+    ├── 015_archive.sql              # archived_threads table
+    └── 016_board_config_max_threads.sql # max_threads column on board_configs              # archived_threads table
 ```
 
-Every migration has a matching `.down.sql`. All `CREATE TABLE` / `CREATE INDEX` statements use `IF NOT EXISTS` for idempotency.
+Every migration has a matching `.down.sql`. 001–013: base schema; 014: cycle + dedup; 015: archive; 016: max_threads on board_configs. All `CREATE TABLE` / `CREATE INDEX` statements use `IF NOT EXISTS` for idempotency.
 
 ---
 
@@ -79,23 +83,16 @@ All `Pg*Repository` types wrap a `PgPool` (cloned cheaply — Arc internally). T
 
 ### `PgPostRepository` notable methods
 
-| Method | SQL |
-|--------|-----|
-| `save` | `INSERT INTO posts` with `RETURNING post_number` (counter driven by board-level sequence) |
-| `delete` | `DELETE FROM posts WHERE id = $1` |
-| `delete_by_ip_in_thread` | `DELETE FROM posts WHERE ip_hash = $1 AND thread_id = $2` — returns row count for [D*] mod action |
-| `find_by_ip_hash` | Cross-thread IP history for moderation use |
-| `search_fulltext` | `plainto_tsquery` + `ts_rank` — only called when `board_config.search_enabled` |
-
-### `PgThreadRepository` notable methods
-
-| Method | SQL |
-|--------|-----|
-| `set_sticky` | `UPDATE threads SET sticky = $2 WHERE id = $1` |
-| `set_closed` | `UPDATE threads SET closed = $2 WHERE id = $1` |
-| `bump` | `UPDATE threads SET bumped_at = now() WHERE id = $1` |
-| `prune_oldest` | `DELETE FROM threads WHERE board_id = $1 ORDER BY bumped_at ASC LIMIT 1` |
-
+| Method | Notes |
+|--------|-------|
+| `save(post)` | CTE atomically increments `boards.post_counter` and inserts the post |
+| `find_all_by_thread(thread_id)` | Returns up to 500 posts ordered by `post_number ASC` |
+| `find_attachments_by_post_ids(ids)` | Bulk fetch for overboard and dashboard views |
+| `find_thread_id_by_post_number(board_id, n)` | Cross-board `>>>/{slug}/{N}` redirect resolution |
+| `find_attachment_by_hash(hash)` | Deduplication lookup — reuses existing keys for identical files |
+| `find_oldest_unpinned_reply(thread_id)` | Cycle-mode pruning: oldest non-OP, non-pinned reply |
+| `delete_by_id(id)` | Single-post delete for cycle pruning |
+| `set_pinned(id, bool)` | Pin/unpin a post in a cycle thread |
 ---
 
 ## In-Memory Adapters

@@ -45,6 +45,8 @@ impl ThreadRepository for NoOpThreadRepo {
     async fn set_op_post(&self, _: ThreadId, _: PostId) -> Result<(), DomainError> { unimplemented!() }
     async fn set_sticky(&self, _: ThreadId, _: bool) -> Result<(), DomainError> { unimplemented!() }
     async fn set_closed(&self, _: ThreadId, _: bool) -> Result<(), DomainError> { unimplemented!() }
+    async fn set_cycle(&self, _: domains::models::ThreadId, _: bool) -> Result<(), domains::errors::DomainError> { Ok(()) }
+    async fn find_oldest_for_archive(&self, _: domains::models::BoardId, _: u32) -> Result<Vec<domains::models::Thread>, domains::errors::DomainError> { Ok(vec![]) }
     async fn count_by_board(&self, _: BoardId) -> Result<u32, DomainError> { unimplemented!() }
     async fn prune_oldest(&self, _: BoardId, _: u32) -> Result<u32, DomainError> { unimplemented!() }
     async fn delete(&self, _: ThreadId) -> Result<(), DomainError> { unimplemented!() }
@@ -71,6 +73,10 @@ impl PostRepository for NoOpPostRepo {
     ) -> Result<Paginated<Post>, DomainError> { unimplemented!() }
     async fn find_all_by_thread(&self, _: ThreadId) -> Result<Vec<Post>, DomainError> { Ok(vec![]) }
     async fn find_thread_id_by_post_number(&self, _: BoardId, _: u64) -> Result<Option<ThreadId>, DomainError> { Ok(None) }
+    async fn set_pinned(&self, _: domains::models::PostId, _: bool) -> Result<(), domains::errors::DomainError> { Ok(()) }
+    async fn find_oldest_unpinned_reply(&self, _: domains::models::ThreadId) -> Result<Option<domains::models::PostId>, domains::errors::DomainError> { Ok(None) }
+    async fn find_attachment_by_hash(&self, _: &domains::models::ContentHash) -> Result<Option<domains::models::Attachment>, domains::errors::DomainError> { Ok(None) }
+    async fn delete_by_id(&self, _: domains::models::PostId) -> Result<(), domains::errors::DomainError> { Ok(()) }
 }
 
 struct NoOpBanRepo;

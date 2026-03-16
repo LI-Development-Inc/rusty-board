@@ -215,6 +215,61 @@ where
         Ok(())
     }
 
+    /// Set cycle mode on a thread. When `cycle=true` and the thread is past the
+    /// bump limit, posting prunes the oldest unpinned reply instead of stopping.
+    #[instrument(skip(self), fields(actor_id = %actor_id))]
+    pub async fn set_cycle(
+        &self,
+        thread_id: ThreadId,
+        cycle: bool,
+        actor_id: UserId,
+    ) -> Result<(), ModerationError> {
+        self.thread_repo.set_cycle(thread_id, cycle).await.map_err(|e| match e {
+            DomainError::NotFound { .. } => ModerationError::NotFound {
+                resource: thread_id.to_string(),
+            },
+            other => ModerationError::Internal(other),
+        })?;
+        self.write_audit(
+            Some(actor_id),
+            None,
+            AuditAction::CycleThread,
+            Some(thread_id.0),
+            Some("thread".to_owned()),
+            Some(serde_json::json!({ "cycle": cycle })),
+        )
+        .await;
+        info!(thread_id = %thread_id, cycle, "thread cycle mode updated");
+        Ok(())
+    }
+
+    /// Pin or unpin a post. Pinned posts are excluded from cycle-mode pruning.
+    #[instrument(skip(self), fields(actor_id = %actor_id))]
+    pub async fn set_pinned(
+        &self,
+        post_id: PostId,
+        pinned: bool,
+        actor_id: UserId,
+    ) -> Result<(), ModerationError> {
+        self.post_repo.set_pinned(post_id, pinned).await.map_err(|e| match e {
+            DomainError::NotFound { .. } => ModerationError::NotFound {
+                resource: post_id.to_string(),
+            },
+            other => ModerationError::Internal(other),
+        })?;
+        self.write_audit(
+            Some(actor_id),
+            None,
+            AuditAction::PinPost,
+            Some(post_id.0),
+            Some("post".to_owned()),
+            Some(serde_json::json!({ "pinned": pinned })),
+        )
+        .await;
+        info!(post_id = %post_id, pinned, "post pinned status updated");
+        Ok(())
+    }
+
     /// Issue an IP ban and record an audit entry.
     ///
     /// Returns the assigned `BanId`.

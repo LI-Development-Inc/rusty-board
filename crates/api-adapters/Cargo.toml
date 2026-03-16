@@ -10,7 +10,7 @@ web-actix = []  # v1.x+
 
 [dependencies]
 domains          = { path = "../domains" }
-services         = { path = "../services" }
+services         = { path = "../services", features = ["auth-tripcode"] }
 storage-adapters = { path = "../storage-adapters" }
 thiserror        = { workspace = true }
 serde            = { workspace = true }

@@ -1,7 +1,4 @@
-//! Moderation routes: flags, bans, delete, sticky, close.
-//! TODO v1.2: add cycle and pin routes once handlers are implemented:
-//!   POST /mod/threads/{id}/cycle  → toggle_cycle
-//!   POST /mod/posts/{id}/pin      → set_post_pinned
+//! Moderation routes: flags, bans, delete, sticky, close, cycle, pin.
 
 use axum::{
     routing::{get, post},
@@ -60,7 +57,9 @@ where
         .route("/mod/threads/{id}/delete", post(moderation_handlers::delete_thread::<BR, PR, TR, FR, AR, UR>))
         .route("/mod/threads/{id}/delete-by-ip", post(moderation_handlers::delete_posts_by_ip::<BR, PR, TR, FR, AR, UR>))
         .route("/mod/threads/{id}/sticky", post(moderation_handlers::toggle_sticky::<BR, PR, TR, FR, AR, UR>))
-        .route("/mod/threads/{id}/close", post(moderation_handlers::toggle_closed::<BR, PR, TR, FR, AR, UR>))
+        .route("/mod/threads/{id}/close",  post(moderation_handlers::toggle_closed::<BR, PR, TR, FR, AR, UR>))
+        .route("/mod/threads/{id}/cycle",  post(moderation_handlers::toggle_cycle::<BR, PR, TR, FR, AR, UR>))
+        .route("/mod/posts/{id}/pin",      post(moderation_handlers::set_post_pinned::<BR, PR, TR, FR, AR, UR>))
         // ── Bans ───────────────────────────────────────────────────────────────
         .route(
             "/mod/bans",

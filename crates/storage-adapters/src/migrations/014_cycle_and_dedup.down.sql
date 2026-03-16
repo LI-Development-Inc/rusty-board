@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS attachments_hash_idx;
+ALTER TABLE posts   DROP COLUMN IF EXISTS pinned;
+ALTER TABLE threads DROP COLUMN IF EXISTS cycle;

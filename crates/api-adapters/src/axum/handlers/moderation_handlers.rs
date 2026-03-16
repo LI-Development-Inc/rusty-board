@@ -197,27 +197,48 @@ where
     Ok(Json(serde_json::json!({ "deleted": count })))
 }
 
-// ── TODO v1.2: Cycle & Pin handlers ──────────────────────────────────────────
-//
-// These handlers are stubbed so the routes can be declared now; the domain logic
-// (Thread::cycle field, Post::pinned field, pruning in PostService) lands in v1.2.
-//
-// Uncomment and implement when migration 014 (`cycle` on threads, `pinned` on posts)
-// is applied and the `set_cycle` / `set_pinned` port methods are added.
-//
-// /// `POST /mod/threads/:id/cycle` — toggle cycle mode on a thread.
-// ///
-// /// When `cycle=true` the thread never expires: once it hits the bump limit the
-// /// oldest unpinned post is pruned instead of the thread closing.
-// /// Body: `{ "value": true }` to enable, `{ "value": false }` to disable.
-// pub async fn toggle_cycle<BR, PR, TR, FR, AR, UR>(...) { todo!("v1.2") }
-//
-// /// `POST /mod/posts/:id/pin` — pin a post in a cycle thread.
-// ///
-// /// Pinned posts are never pruned during cycle rotation. Only meaningful when
-// /// the parent thread has `cycle=true`.
-// /// Body: `{ "value": true }` to pin, `{ "value": false }` to unpin.
-// pub async fn set_post_pinned<BR, PR, TR, FR, AR, UR>(...) { todo!("v1.2") }
+/// `POST /mod/threads/:id/cycle` — toggle cycle mode on a thread.
+pub async fn toggle_cycle<BR, PR, TR, FR, AR, UR>(
+    State(svc): State<Arc<ModerationService<BR, PR, TR, FR, AR, UR>>>,
+    ModeratorUser(current): ModeratorUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<SetBoolRequest>,
+) -> Result<StatusCode, ApiError>
+where
+    BR: domains::ports::BanRepository,
+    PR: domains::ports::PostRepository,
+    TR: domains::ports::ThreadRepository,
+    FR: domains::ports::FlagRepository,
+    AR: domains::ports::AuditRepository,
+    UR: domains::ports::UserRepository,
+{
+    svc.set_cycle(domains::models::ThreadId(id), req.value, current.user_id())
+        .await
+        .map_err(ApiError::from)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /mod/posts/:id/pin` — pin or unpin a post in a cycle thread.
+pub async fn set_post_pinned<BR, PR, TR, FR, AR, UR>(
+    State(svc): State<Arc<ModerationService<BR, PR, TR, FR, AR, UR>>>,
+    ModeratorUser(current): ModeratorUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<SetBoolRequest>,
+) -> Result<StatusCode, ApiError>
+where
+    BR: domains::ports::BanRepository,
+    PR: domains::ports::PostRepository,
+    TR: domains::ports::ThreadRepository,
+    FR: domains::ports::FlagRepository,
+    AR: domains::ports::AuditRepository,
+    UR: domains::ports::UserRepository,
+{
+    svc.set_pinned(domains::models::PostId(id), req.value, current.user_id())
+        .await
+        .map_err(ApiError::from)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 
 /// `POST /mod/bans` — issue an IP ban.
 pub async fn create_ban<BR, PR, TR, FR, AR, UR>(

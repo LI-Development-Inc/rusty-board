@@ -10,17 +10,26 @@ use services::board::BoardRepo;
 use domains::ports::PostRepository;
 
 use crate::axum::handlers::board_handlers;
-use crate::axum::handlers::board_handlers::SearchState;
+use crate::axum::handlers::board_handlers::{ArchiveState, SearchState};
 
 /// Public board routes — no auth required.
-pub fn board_public_routes<BR, PR>(board_service: Arc<BR>, post_repo: PR) -> Router
+pub fn board_public_routes<BR, PR, AR>(
+    board_service: Arc<BR>,
+    post_repo: PR,
+    archive_repo: Arc<AR>,
+) -> Router
 where
     BR: BoardRepo,
     PR: PostRepository + Clone,
+    AR: domains::ports::ArchiveRepository + Clone,
 {
     let search_state = SearchState {
         board_svc: Arc::clone(&board_service),
         post_repo,
+    };
+    let archive_state = ArchiveState {
+        board_svc:    Arc::clone(&board_service),
+        archive_repo,
     };
 
     Router::new()
@@ -31,6 +40,11 @@ where
             Router::new()
                 .route("/boards/{slug}/search", get(board_handlers::search_board::<BR, PR>))
                 .with_state(search_state),
+        )
+        .merge(
+            Router::new()
+                .route("/board/{slug}/archive", get(board_handlers::show_archive::<BR, AR>))
+                .with_state(archive_state),
         )
 }
 

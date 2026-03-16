@@ -91,12 +91,23 @@ pub trait ThreadRepo: Send + Sync + 'static {
 pub struct ThreadService<TR: ThreadRepository, PR: PostRepository> {
     repo:      TR,
     post_repo: PR,
+    /// Optional archive store. When set, pruned threads are archived before deletion.
+    archive:   Option<std::sync::Arc<dyn domains::ports::ArchiveRepository>>,
 }
 
 impl<TR: ThreadRepository, PR: PostRepository> ThreadService<TR, PR> {
     /// Construct a new `ThreadService`.
     pub fn new(repo: TR, post_repo: PR) -> Self {
-        Self { repo, post_repo }
+        Self { repo, post_repo, archive: None }
+    }
+
+    /// Attach an `ArchiveRepository` so pruned threads are archived rather than deleted.
+    pub fn with_archive(
+        mut self,
+        archive: std::sync::Arc<dyn domains::ports::ArchiveRepository>,
+    ) -> Self {
+        self.archive = Some(archive);
+        self
     }
 
     /// Allocate a new thread row for the given board.
@@ -113,7 +124,7 @@ impl<TR: ThreadRepository, PR: PostRepository> ThreadService<TR, PR> {
             reply_count: 0,
             bumped_at: now,
             sticky: false,
-            closed: false,
+            closed: false, cycle: false,
             created_at: now,
         };
         let thread_id = self.repo.save(&thread).await?;
@@ -193,24 +204,50 @@ impl<TR: ThreadRepository, PR: PostRepository> ThreadService<TR, PR> {
     ///
     /// Called by `PostService` after a new thread is created.
     #[instrument(skip(self), fields(board_id = %board_id, max_threads = max_threads))]
+    /// Prune threads when the board exceeds `max_threads`.
+    ///
+    /// When `archive_enabled` is true and an `ArchiveRepository` is wired,
+    /// each thread to be removed is archived before deletion (best-effort;
+    /// an archive failure is logged but never blocks the prune).
     pub async fn prune_if_needed(
         &self,
         board_id: BoardId,
         max_threads: u32,
     ) -> Result<u32, ThreadError> {
+        self.prune_with_archive(board_id, max_threads, false).await
+    }
+
+    /// Same as `prune_if_needed` but respects the `archive_enabled` flag from `BoardConfig`.
+    pub async fn prune_with_archive(
+        &self,
+        board_id: BoardId,
+        max_threads: u32,
+        archive_enabled: bool,
+    ) -> Result<u32, ThreadError> {
         let count = self.repo.count_by_board(board_id).await?;
-        if count > max_threads {
-            let deleted = self.repo.prune_oldest(board_id, max_threads).await?;
-            if deleted > 0 {
-                warn!(
-                    board_id = %board_id,
-                    pruned = deleted,
-                    "pruned old threads to stay within max_threads limit"
-                );
-            }
-            return Ok(deleted);
+        if count <= max_threads {
+            return Ok(0);
         }
-        Ok(0)
+        // When archiving is requested, collect excess threads first, archive them,
+        // then prune. Fall back to plain prune on any error.
+        if archive_enabled {
+            if let Some(ref archive) = self.archive {
+                let excess = (count - max_threads) as i64;
+                // Fetch oldest non-sticky threads to archive.
+                if let Ok(candidates) = self.repo.find_oldest_for_archive(board_id, excess as u32).await {
+                    for thread in &candidates {
+                        if let Err(e) = archive.archive_thread(thread).await {
+                            warn!(thread_id = %thread.id, error = %e, "archive failed (proceeding with prune)");
+                        }
+                    }
+                }
+            }
+        }
+        let deleted = self.repo.prune_oldest(board_id, max_threads).await?;
+        if deleted > 0 {
+            warn!(board_id = %board_id, pruned = deleted, "pruned old threads");
+        }
+        Ok(deleted)
     }
 }
 

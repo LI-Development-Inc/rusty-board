@@ -493,11 +493,8 @@ pub struct Thread {
     pub sticky: bool,
     /// Closed threads do not accept new posts.
     pub closed: bool,
-    // TODO v1.2: cycle mode — when `true`, the oldest unpinned post is pruned when a new
-    // reply would exceed the bump limit instead of the thread expiring.
-    // Requires migration adding `cycle BOOLEAN NOT NULL DEFAULT FALSE` to `threads`
-    // and a `set_cycle(id, bool)` method on `ThreadRepository`.
-    // pub cycle: bool,
+    /// Cycle threads prune the oldest unpinned reply instead of locking when full.
+    pub cycle: bool,
     /// When this thread was created.
     pub created_at: DateTime<Utc>,
 }
@@ -561,10 +558,8 @@ pub struct Post {
     pub created_at: DateTime<Utc>,
     /// Board-scoped sequential number (1-indexed). Used in `No.N` display.
     pub post_number: u64,
-    // TODO v1.2: pinned — when `true` in a cycle thread, this post is never pruned.
-    // Requires migration adding `pinned BOOLEAN NOT NULL DEFAULT FALSE` to `posts`
-    // and a `set_pinned(id, bool)` method on `PostRepository`.
-    // pub pinned: bool,
+    /// Pinned posts are excluded from cycle-mode pruning.
+    pub pinned: bool,
 }
 
 /// A lightweight post entry for the overboard view, enriched with board context.
@@ -750,6 +745,10 @@ pub enum AuditAction {
     StickyThread,
     /// A thread was closed to new replies, or re-opened.
     CloseThread,
+    /// A thread's cycle mode was toggled on or off.
+    CycleThread,
+    /// A post's pinned status was set (only meaningful in cycle threads).
+    PinPost,
     /// An IP hash was banned.
     BanIp,
     /// An active ban was manually expired before its scheduled expiry.
@@ -775,6 +774,8 @@ impl std::fmt::Display for AuditAction {
             AuditAction::DeleteThread      => "delete_thread",
             AuditAction::StickyThread      => "sticky_thread",
             AuditAction::CloseThread       => "close_thread",
+            AuditAction::CycleThread       => "cycle_thread",
+            AuditAction::PinPost           => "pin_post",
             AuditAction::BanIp             => "ban_ip",
             AuditAction::ExpireBan         => "expire_ban",
             AuditAction::ResolveFlag       => "resolve_flag",
@@ -796,6 +797,8 @@ impl std::str::FromStr for AuditAction {
             "delete_thread"      => Ok(AuditAction::DeleteThread),
             "sticky_thread"      => Ok(AuditAction::StickyThread),
             "close_thread"       => Ok(AuditAction::CloseThread),
+            "cycle_thread"       => Ok(AuditAction::CycleThread),
+            "pin_post"           => Ok(AuditAction::PinPost),
             "ban_ip"             => Ok(AuditAction::BanIp),
             "expire_ban"         => Ok(AuditAction::ExpireBan),
             "resolve_flag"       => Ok(AuditAction::ResolveFlag),
@@ -830,6 +833,10 @@ pub struct BoardConfig {
     // ── Content rules ──────────────────────────────────────────────────────
     /// Replies past this count no longer bump the thread. Default: 500.
     pub bump_limit: u32,
+    /// Maximum number of live threads on this board. When the board exceeds this
+    /// limit after a new OP is posted, the oldest non-sticky thread is pruned
+    /// (or archived if `archive_enabled` is true). Default: 200.
+    pub max_threads: u32,
     /// Maximum number of file attachments per post. Default: 4.
     pub max_files: u8,
     /// Maximum file size per attachment in kilobytes. Default: 10240 (10 MB).
@@ -887,10 +894,8 @@ pub struct BoardConfig {
     // Fields are present now so that the schema is stable; the adapters that
     // actually act on these toggles ship in later versions.
     /// Full-text search enabled. Adapter ships in v1.2. Default: false.
-    // TODO(v1.2): wire SearchIndex port when search_enabled = true
     pub search_enabled: bool,
     /// Posts are archived before pruning. Adapter ships in v1.2. Default: false.
-    // TODO(v1.2): implement archive adapter when archive_enabled = true
     pub archive_enabled: bool,
     /// ActivityPub federation enabled. Adapter ships in v2.0. Default: false.
     // TODO(v2.0): wire FederationSync port when federation_enabled = true
@@ -902,6 +907,7 @@ impl Default for BoardConfig {
     fn default() -> Self {
         Self {
             bump_limit:             500,
+            max_threads:            200,
             max_files:              4,
             max_file_size:          FileSizeKb(10240),
             allowed_mimes:          vec![

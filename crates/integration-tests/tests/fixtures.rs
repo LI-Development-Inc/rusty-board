@@ -74,14 +74,14 @@ pub mod boards {
 
     /// Construct an open, non-sticky `Thread` belonging to `board_id`.
     pub fn thread(board_id: BoardId) -> Thread {
-        Thread { id: ThreadId(Uuid::new_v4()), board_id, op_post_id: None, reply_count: 0, bumped_at: Utc::now(), sticky: false, closed: false, created_at: Utc::now() }
+        Thread { id: ThreadId(Uuid::new_v4()), board_id, op_post_id: None, reply_count: 0, bumped_at: Utc::now(), sticky: false, closed: false, cycle: false, created_at: Utc::now() }
     }
 
     /// A sticky thread (`sticky: true`).
     pub fn sticky_thread(board_id: BoardId) -> Thread { Thread { sticky: true, ..thread(board_id) } }
 
-    /// A closed thread (`closed: true`).
-    pub fn closed_thread(board_id: BoardId) -> Thread { Thread { closed: true, ..thread(board_id) } }
+    /// A closed thread (`closed: true, cycle: false`).
+    pub fn closed_thread(board_id: BoardId) -> Thread { Thread { closed: true, cycle: false, ..thread(board_id) } }
 
     /// A thread whose `reply_count` equals `limit` (used to test bump-limit behaviour).
     pub fn bumped_out_thread(board_id: BoardId, limit: u32) -> Thread { Thread { reply_count: limit, ..thread(board_id) } }
@@ -139,12 +139,12 @@ pub fn board_page_fixture(slug: &str) -> Paginated<Board> {
 
 /// Build a minimal open `Thread` belonging to `board_id`.
 pub fn thread_fixture(board_id: BoardId) -> Thread {
-    Thread { id: ThreadId(Uuid::new_v4()), board_id, op_post_id: None, reply_count: 0, bumped_at: Utc::now(), sticky: false, closed: false, created_at: Utc::now() }
+    Thread { id: ThreadId(Uuid::new_v4()), board_id, op_post_id: None, reply_count: 0, bumped_at: Utc::now(), sticky: false, closed: false, cycle: false, created_at: Utc::now() }
 }
 
 /// Build a minimal text `Post` belonging to `thread_id`.
 pub fn post_fixture(thread_id: ThreadId) -> Post {
-    Post { id: PostId(Uuid::new_v4()), thread_id, body: "Test post body.".to_owned(), ip_hash: IpHash::new("deadbeef".repeat(8)), name: None, email: None, tripcode: None, created_at: Utc::now(), post_number: 1 }
+    Post { id: PostId(Uuid::new_v4()), thread_id, body: "Test post body.".to_owned(), ip_hash: IpHash::new("deadbeef".repeat(8)), name: None, email: None, tripcode: None, created_at: Utc::now(), post_number: 1, pinned: false }
 }
 
 /// A bearer token with an invalid signature — triggers `401` on protected routes.

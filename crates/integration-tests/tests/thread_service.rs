@@ -16,7 +16,7 @@ fn sample_thread(board_id: BoardId) -> Thread {
         reply_count: 0,
         bumped_at:   Utc::now(),
         sticky:      false,
-        closed:      false,
+        closed:      false, cycle: false,
         created_at:  Utc::now(),
     }
 }

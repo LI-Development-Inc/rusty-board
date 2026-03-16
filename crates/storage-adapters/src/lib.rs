@@ -13,6 +13,7 @@
 //! - `redis` — Redis rate limiter via deadpool-redis
 
 pub mod cache;
+pub mod dnsbl;
 pub mod media;
 
 #[cfg(feature = "db-postgres")]

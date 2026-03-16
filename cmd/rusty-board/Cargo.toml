@@ -24,10 +24,11 @@ media-local = ["storage-adapters/media-local", "configs/media-local"]
 video       = ["storage-adapters/video"]
 documents   = ["storage-adapters/documents"]
 redis       = ["storage-adapters/redis", "configs/redis"]
+spam-dnsbl  = ["storage-adapters/spam-dnsbl"]
 
 [dependencies]
 domains          = { path = "../../crates/domains" }
-services         = { path = "../../crates/services" }
+services         = { path = "../../crates/services", features = ["auth-tripcode"] }
 storage-adapters = { path = "../../crates/storage-adapters" }
 auth-adapters    = { path = "../../crates/auth-adapters" }
 api-adapters     = { path = "../../crates/api-adapters" }

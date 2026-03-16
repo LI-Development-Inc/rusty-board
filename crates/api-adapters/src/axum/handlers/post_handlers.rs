@@ -66,6 +66,7 @@ where
         name:        None,
         email:       None,
         ip_hash,
+        raw_ip:      Some(raw_ip),
         files:       Vec::new(),
         is_staff,
         poster_role,

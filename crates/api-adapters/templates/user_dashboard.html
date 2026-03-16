@@ -148,7 +148,8 @@
     btn.textContent = 'Submitting…';
 
     fetch('/user/requests', {
-      method: 'POST',
+      credentials: 'same-origin',
+    method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body),
     })

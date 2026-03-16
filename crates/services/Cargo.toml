@@ -3,6 +3,12 @@ name    = "services"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# When disabled, the name field is stored as-is and no tripcode/capcode
+# parsing occurs. Useful for deployments that want a plain name field
+# without the tripcode syntax. Default: enabled.
+auth-tripcode = []
+
 [dependencies]
 domains     = { path = "../domains" }
 thiserror   = { workspace = true }
@@ -17,6 +23,7 @@ bytes       = { workspace = true }
 mime        = { workspace = true }
 sha2        = "0.10"   # for ip_hash utility function
 hex         = "0.4"    # for hex encoding hashes
+hmac        = { workspace = true } # for super-tripcode HMAC-SHA256
 
 [dev-dependencies]
 domains     = { path = "../domains", features = ["testing"] }

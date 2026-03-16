@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Inbox — rusty-board{% endblock %}
 
-{% block nav_right %}| <a href="/mod/dashboard">[dashboard]</a> <a href="/auth/logout">[logout]</a>{% endblock %}
 
 {% block content %}
 <div class="dashboard">
@@ -38,6 +37,8 @@
         {% else %}
         <span style="color:var(--fg-muted,#888);font-size:.8em">read</span>
         {% endif %}
+        <a href="/staff/messages/new?to={{ msg.from_user_id }}"
+           style="font-size:.8em;margin-left:.4rem">[Reply]</a>
       </td>
     </tr>
     <tr>

@@ -16,7 +16,7 @@ All application business logic lives here. Generic over port traits defined in `
 | `staff_request/` | `StaffRequestService<SRR,UR>` | Submit, approve, deny staff elevation requests |
 | `staff_message/` | `StaffMessageService<SMR>` | Send, list, mark-as-read internal staff messages |
 | `common/utils.rs` | — | `slug_validate`, `paginate`, `now_utc`, `hash_ip`, `hash_content`, `parse_quotes`, `score_spam` |
-| `common/tripcode.rs` | — | Insecure trip (`!`), secure trip (`!!`), capcode (`####Role`), super trip stub (`###`) |
+| `common/tripcode.rs` | — | Insecure trip (`!`), secure trip (`!!`), super trip (`!!!`) via HMAC-SHA256, capcode (`#### Role`) |
 
 ---
 
@@ -70,12 +70,13 @@ Full pipeline in order:
 6. Spam heuristic score (if `board_config.spam_filter_enabled`)
 7. File count and MIME validation (against `board_config`)
 8. Media processing (resize, EXIF strip, thumbnail)
-9. Post insert + attachment rows
-10. Thread bump (unless sage or past bump limit)
-11. Rate limit increment
-12. Audit log
-
-> **TODO v1.2**: step 10 will also trigger oldest-post pruning when `thread.cycle == true` and past bump limit. See stub comment in `post/mod.rs`.
+9. **Deduplication** — SHA-256 hash lookup via `PostRepository::find_attachment_by_hash`; reuses existing `media_key` / `thumbnail_key` for identical files, skips re-upload
+10. Post insert + attachment rows
+11. Thread bump (unless sage or past bump limit)
+12. **Cycle pruning** — when `thread.cycle == true` and past bump limit, `find_oldest_unpinned_reply` + `delete_by_id` prune the oldest non-OP unpinned reply (best-effort; failure never blocks the new post)
+13. Rate limit increment
+14. **Board-capacity prune** — when new thread created, prunes/archives oldest non-sticky threads if over `max_threads`
+15. Audit log
 
 ### `PostService` read methods
 
@@ -95,6 +96,8 @@ Full pipeline in order:
 | `ban_ip` | `POST /mod/bans` | Issue IP ban |
 | `set_sticky` | `POST /mod/threads/:id/sticky` | Set/clear sticky |
 | `set_closed` | `POST /mod/threads/:id/close` | Set/clear closed |
+| `set_cycle` | `POST /mod/threads/:id/cycle` | Toggle cycle mode (`[CY+/-]`) |
+| `set_pinned` | `POST /mod/posts/:id/pin` | Pin/unpin a post (`[PIN+/-]`) |
 | `file_flag` | `POST /board/:slug/thread/:id/flag` | User submits report |
 | `resolve_flag` | `POST /mod/flags/:id/resolve` | Staff resolves report |
 
@@ -110,10 +113,10 @@ Full pipeline in order:
 
 | Input | Output | Algorithm |
 |-------|--------|-----------|
-| `name#password` | `!ABCxyz` | SHA-512, base64 truncated to 8 chars |
-| `name##password` | `!!ABCxyz` | HMAC-SHA256 with per-instance pepper |
-| `name###Role` | `!!!STUB` | ed25519 — **TODO v1.2** (needs `TripkeyRepository`) |
-| `####Role` | capcode | JWT-verified staff identity display |
+| `name#password` | `!{10hex}` | SHA-256(password)[0..5] |
+| `name##password` | `!!{10hex}` | SHA-256(pepper \|\| "::" \|\| password)[0..5] |
+| `name###password` | `!!!{10hex}` | HMAC-SHA256(key=pepper, msg="###"\|\|password)[0..5] — server-bound |
+| `name ### Role` | `!!!! Role` | capcode — JWT-verified staff identity display |
 
 ---
 
@@ -137,12 +140,11 @@ Current coverage: **84 tests**, all passing.
 
 ---
 
-## v1.1 Status
+## v1.2 Status — Complete
 
-All services shipped. Open items tracked in `ROADMAP.md`:
+All planned v1.2 service features shipped.
 
 | Item | Target |
 |------|--------|
-| `CaptchaVerifier` wiring in `PostService` | v1.1.1 |
-| Super tripcode `###` ed25519 implementation | v1.2 |
-| Thread cycle pruning in `PostService::create_post` | v1.2 |
+| `CaptchaVerifier` wiring in `PostService` | v1.1.1 (pending) |
+| SQLite backend (`db-sqlite`) — all repository ports | v2.0 |

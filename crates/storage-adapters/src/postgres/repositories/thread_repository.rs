@@ -39,6 +39,7 @@ struct ThreadRow {
     bumped_at:    DateTime<Utc>,
     sticky:       bool,
     closed:       bool,
+    cycle:        bool,
     created_at:   DateTime<Utc>,
 }
 
@@ -51,6 +52,7 @@ fn thread_from_row(r: ThreadRow) -> Thread {
         bumped_at:   r.bumped_at,
         sticky:      r.sticky,
         closed:      r.closed,
+        cycle:       r.cycle,
         created_at:  r.created_at,
     }
 }
@@ -77,7 +79,7 @@ impl ThreadRepository for PgThreadRepository {
     #[instrument(skip(self), fields(thread_id = %id))]
     async fn find_by_id(&self, id: ThreadId) -> Result<Thread, DomainError> {
         let row = sqlx::query_as::<_, ThreadRow>(
-            "SELECT id, board_id, op_post_id, reply_count, bumped_at, sticky, closed, created_at \
+            "SELECT id, board_id, op_post_id, reply_count, bumped_at, sticky, closed, cycle, created_at \
              FROM threads WHERE id = $1"
         )
         .bind(id.0)
@@ -94,7 +96,7 @@ impl ThreadRepository for PgThreadRepository {
         let limit  = page_size as i64;
 
         let rows = sqlx::query_as::<_, ThreadRow>(
-            "SELECT id, board_id, op_post_id, reply_count, bumped_at, sticky, closed, created_at \
+            "SELECT id, board_id, op_post_id, reply_count, bumped_at, sticky, closed, cycle, created_at \
              FROM threads WHERE board_id = $1 \
              ORDER BY sticky DESC, bumped_at DESC LIMIT $2 OFFSET $3"
         )
@@ -161,14 +163,15 @@ impl ThreadRepository for PgThreadRepository {
     #[instrument(skip(self, thread), fields(board_id = %thread.board_id))]
     async fn save(&self, thread: &Thread) -> Result<ThreadId, DomainError> {
         sqlx::query(
-            "INSERT INTO threads (id, board_id, op_post_id, reply_count, bumped_at, sticky, closed, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "INSERT INTO threads (id, board_id, op_post_id, reply_count, bumped_at, sticky, closed, cycle, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT (id) DO UPDATE SET
                op_post_id = EXCLUDED.op_post_id,
                reply_count = EXCLUDED.reply_count,
                bumped_at = EXCLUDED.bumped_at,
                sticky = EXCLUDED.sticky,
-               closed = EXCLUDED.closed"
+               closed = EXCLUDED.closed,
+               cycle = EXCLUDED.cycle"
         )
         .bind(thread.id.0)
         .bind(thread.board_id.0)
@@ -177,6 +180,7 @@ impl ThreadRepository for PgThreadRepository {
         .bind(thread.bumped_at)
         .bind(thread.sticky)
         .bind(thread.closed)
+        .bind(thread.cycle)
         .bind(thread.created_at)
         .execute(&self.pool)
         .await
@@ -228,6 +232,16 @@ impl ThreadRepository for PgThreadRepository {
         Ok(())
     }
 
+    async fn set_cycle(&self, id: ThreadId, cycle: bool) -> Result<(), DomainError> {
+        sqlx::query("UPDATE threads SET cycle = $2 WHERE id = $1")
+            .bind(id.0)
+            .bind(cycle)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| map_sqlx_err(e, id.to_string()))?;
+        Ok(())
+    }
+
     async fn count_by_board(&self, board_id: BoardId) -> Result<u32, DomainError> {
         let count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM threads WHERE board_id = $1"
@@ -267,5 +281,25 @@ impl ThreadRepository for PgThreadRepository {
             return Err(DomainError::not_found(id.to_string()));
         }
         Ok(())
+    }
+
+    async fn find_oldest_for_archive(
+        &self,
+        board_id: BoardId,
+        limit: u32,
+    ) -> Result<Vec<Thread>, DomainError> {
+        let rows = sqlx::query_as::<_, ThreadRow>(
+            "SELECT id, board_id, op_post_id, reply_count, bumped_at, sticky, closed, cycle, created_at \
+             FROM   threads \
+             WHERE  board_id = $1 AND sticky = FALSE \
+             ORDER  BY bumped_at ASC \
+             LIMIT  $2",
+        )
+        .bind(board_id.0)
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| DomainError::internal(e.to_string()))?;
+        Ok(rows.into_iter().map(thread_from_row).collect())
     }
 }

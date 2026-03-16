@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}New Message — rusty-board{% endblock %}
 
-{% block nav_right %}| <a href="/mod/dashboard">[dashboard]</a> <a href="/auth/logout">[logout]</a>{% endblock %}
 
 {% block content %}
 <div class="dashboard" style="max-width:600px">
@@ -50,6 +49,7 @@ document.getElementById('msg-send').addEventListener('click', function() {
   status.textContent = 'Sending…';
 
   fetch('/staff/messages', {
+    credentials: 'same-origin',
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',

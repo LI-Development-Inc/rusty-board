@@ -252,18 +252,39 @@ pub async fn compose(settings: &Settings) -> anyhow::Result<Router> {
     // ── BoardConfig cache ─────────────────────────────────────────────────────
     let board_config_cache = Arc::new(BoardConfigCache::new(Duration::from_secs(settings.config_cache_ttl_secs)));
 
+    // ── Shared archive repository ─────────────────────────────────────────────
+    #[cfg(feature = "db-postgres")]
+    let archive_svc = std::sync::Arc::new(
+        storage_adapters::postgres::repositories::archive_repository::PgArchiveRepository::new(pool.clone())
+    );
+
     // ── Services ──────────────────────────────────────────────────────────────
     let board_service = BoardService::new(board_repo.clone());
-    let thread_service = ThreadService::new(thread_repo.clone(), post_repo.clone());
-    let post_service = PostService::new(
-        post_repo.clone(),
-        thread_repo.clone(),
-        ban_repo.clone(),
-        media_storage,
-        rate_limiter,
-        media_processor,
-        settings.tripcode_pepper.clone().unwrap_or_default(),
-    );
+    let thread_service = {
+        let svc = ThreadService::new(thread_repo.clone(), post_repo.clone());
+        // Attach archive store — threads are archived instead of deleted when
+        // board_config.archive_enabled = true and the archive store is wired.
+        let svc = svc.with_archive(archive_svc.clone() as std::sync::Arc<dyn domains::ports::ArchiveRepository>);
+        svc
+    };
+    let post_service = {
+        let svc = PostService::new(
+            post_repo.clone(),
+            thread_repo.clone(),
+            ban_repo.clone(),
+            media_storage,
+            rate_limiter,
+            media_processor,
+            settings.tripcode_pepper.clone().unwrap_or_default(),
+        );
+        // Attach DNSBL checker when the spam-dnsbl feature is enabled.
+        #[cfg(feature = "spam-dnsbl")]
+        let svc = svc.with_dnsbl(std::sync::Arc::new(
+            storage_adapters::dnsbl::SpamhausDnsblChecker::new(),
+        ));
+        let svc = svc.with_archive_repo(archive_svc.clone() as std::sync::Arc<dyn domains::ports::ArchiveRepository>);
+        svc
+    };
     let moderation_service = ModerationService::new(
         ban_repo.clone(),
         post_repo.clone(),
@@ -323,6 +344,7 @@ pub async fn compose(settings: &Settings) -> anyhow::Result<Router> {
         metrics_registry,
         health_state,
         settings.open_registration,
+        archive_svc,
     );
 
     Ok(router)
@@ -353,6 +375,7 @@ fn build_axum_router<BS, PR, TR, BR, MS, RL, MP, FR, AR, UR, AP, RR, MR>(
     metrics_registry:      Arc<prometheus_client::registry::Registry>,
     health_state:          api_adapters::axum::health::HealthState,
     open_registration:     bool,
+    archive_svc:           Arc<storage_adapters::postgres::repositories::archive_repository::PgArchiveRepository>,
 ) -> Router
 where
     // Board service
@@ -386,6 +409,7 @@ where
         metrics::metrics_handler,
         middleware::{
             board_config::{BoardConfigState, board_config_middleware},
+            login_guard::LoginGuard,
             security_headers::security_headers_middleware,
         },
         routes::{
@@ -440,12 +464,12 @@ where
             axum::response::Redirect::to("/overboard")
         }))
         .route("/healthz", get(health_check).with_state(health_state))
-        .merge(board_public_routes(board_svc.clone(), post_repo.clone()))
+        .merge(board_public_routes(board_svc.clone(), post_repo.clone(), archive_svc.clone()))
         .merge(overboard_routes(board_svc.clone(), post_svc.clone()))
         .merge(board_scoped);
 
     let auth_router   = auth_routes(user_svc.clone(), open_registration);
-    let admin_router  = admin_routes(user_svc.clone(), board_svc.clone(), request_svc.clone());
+    let admin_router  = admin_routes(user_svc.clone(), board_svc.clone(), request_svc.clone(), message_svc.clone());
     let board_admin_r = board_admin_routes(board_svc.clone());
     let mod_router    = moderation_routes(mod_svc.clone(), board_svc.clone());
     let user_router   = user_routes(user_svc.clone(), request_svc.clone());
@@ -492,6 +516,8 @@ where
         // 2 MB covers multipart boundary overhead and multiple small files).
         // Without this, Axum's default 2 MB limit rejects image uploads silently.
         .layer(DefaultBodyLimit::max(12 * 1024 * 1024))
+        // Login brute-force guard — shared across all routes via Extension.
+        .layer(axum::Extension(LoginGuard::new()))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .layer(SetRequestIdLayer::new(

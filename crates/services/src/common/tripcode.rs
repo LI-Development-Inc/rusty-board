@@ -66,7 +66,7 @@ pub struct ParsedName {
     /// Format examples:
     /// - `"!a1b2c3d4e5"` — insecure
     /// - `"!!a1b2c3d4e5"` — secure
-    /// - `"!!!STUB"` — super (not yet implemented)
+    /// - `"!!!{10hex}"` — super tripcode: HMAC-SHA256(key=pepper, msg="###"||password)[0..5]
     /// - `"!!!! Admin"` — capcode
     pub tripcode: Option<String>,
 }
@@ -152,10 +152,9 @@ pub fn parse_name_field(
     if let Some(password) = specifier.strip_prefix("###") {
         let name     = clean_name(display_name);
         let tripcode = if password.is_empty() {
-            // `###` with nothing after is ambiguous; treat as no-trip
             None
         } else {
-            Some(super_trip_stub(password))
+            Some(super_trip(password, pepper))
         };
         return Ok(ParsedName { name, tripcode });
     }
@@ -218,27 +217,33 @@ fn secure_trip(password: &str, pepper: &str) -> String {
     format!("!!{}", &hex::encode(&digest[..5]))
 }
 
-/// Super-secure tripcode stub.
+/// Super-secure tripcode — HMAC-SHA256 keyed with the server pepper.
 ///
-/// # TODO — Planned implementation (v1.2)
+/// `HMAC-SHA256(key=pepper, msg="###" || password)` → first 5 bytes → 10 hex chars,
+/// displayed as `!!!{10hex}`.
 ///
-/// The `###` level is reserved for challenge-response identity proofs:
-/// 1. Poster generates an ed25519 key pair offline.
-/// 2. Registers their public key with the admin (`POST /tripkey`, admin-approved).
-/// 3. On each post, `###` triggers a two-step flow:
-///    a. Server issues a short-lived nonce tied to the IP + session.
-///    b. Poster signs `nonce || body_hash` with their private key.
-///    c. Server verifies the signature against the registered public key.
-/// 4. If valid, the post displays `!!!{pubkey_fingerprint[:10]}`.
+/// Properties:
+/// - **Server-bound**: Without the pepper an attacker cannot compute valid trips,
+///   even if they know the password. Identity is tied to this server instance.
+/// - **Deterministic**: Same password + same pepper = same trip, every time.
+/// - **One-way**: Cannot derive the password from the displayed trip.
 ///
-/// This design is proof-of-identity even if the server is fully compromised,
-/// because the private key never leaves the poster's device.
+/// This is more secure than `##` because HMAC's key schedule makes length-extension
+/// attacks impossible. When `pepper` is empty this degrades to HMAC with a zero key
+/// (still deterministic, but the identity becomes server-independent).
 ///
-/// Until this flow is implemented, `###` posts display `!!!STUB` as a placeholder
-/// so the UI can reserve the rendering slot without false security claims.
-fn super_trip_stub(_password: &str) -> String {
-    // TODO(v1.2): replace with ed25519 challenge-response — see module doc.
-    "!!!STUB".to_owned()
+/// Note: the planned ed25519 challenge-response flow (see module doc) would allow
+/// *proof of identity without trusting the server*, which HMAC-SHA256 cannot provide.
+/// That upgrade path remains open — the `!!!` display prefix is reserved for it.
+fn super_trip(password: &str, pepper: &str) -> String {
+    use hmac::{Hmac, Mac};
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = HmacSha256::new_from_slice(pepper.as_bytes())
+        .unwrap_or_else(|_| HmacSha256::new_from_slice(b"").unwrap());
+    mac.update(b"###");
+    mac.update(password.as_bytes());
+    let result = mac.finalize().into_bytes();
+    format!("!!!{}", &hex::encode(&result[..5]))
 }
 
 // ── Capcode helpers ──────────────────────────────────────────────────────────
@@ -347,12 +352,21 @@ mod tests {
         assert_eq!(a, b);
     }
 
-    // ── Super tripcode stub ───────────────────────────────────────────────────
+    // ── Super tripcode (HMAC-SHA256) ─────────────────────────────────────────
 
     #[test]
-    fn super_trip_returns_stub() {
-        let r = parse_name_field("Name###secret", None, "").unwrap();
-        assert_eq!(r.tripcode.as_deref(), Some("!!!STUB"));
+    fn super_trip_produces_hmac_fingerprint() {
+        let r = parse_name_field("Name###secret", None, "pepper").unwrap();
+        let trip = r.tripcode.unwrap();
+        // Must start with !!! and be 13 chars total: !!! + 10 hex chars
+        assert!(trip.starts_with("!!!"), "super trip must start with !!!");
+        assert_eq!(trip.len(), 13, "super trip must be 13 chars (!!! + 10 hex)");
+        // Must be deterministic
+        let r2 = parse_name_field("Name###secret", None, "pepper").unwrap();
+        assert_eq!(r2.tripcode.as_deref(), Some(trip.as_str()));
+        // Different pepper = different trip
+        let r3 = parse_name_field("Name###secret", None, "other").unwrap();
+        assert_ne!(r3.tripcode.as_deref(), Some(trip.as_str()));
     }
 
     // ── Capcodes ─────────────────────────────────────────────────────────────
