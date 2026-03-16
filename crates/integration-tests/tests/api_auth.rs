@@ -119,6 +119,7 @@ impl AuthProvider for AlwaysBadAuth {
 fn app_ok() -> axum::Router {
     let svc = Arc::new(UserService::new(AlwaysOkUserRepo::admin(), AlwaysOkAuth, 3600));
     auth_routes(svc, true)
+        .layer(axum::Extension(api_adapters::axum::middleware::login_guard::LoginGuard::new()))
 }
 
 fn json_body(body: &str) -> Request<Body> {
@@ -155,7 +156,8 @@ async fn login_returns_200_with_token_on_valid_credentials() {
 async fn login_returns_401_when_credentials_invalid() {
     // Use a repo that returns a user but an auth provider that denies the password.
     let svc = Arc::new(UserService::new(AlwaysOkUserRepo::admin(), AlwaysBadAuth, 3600));
-    let app = auth_routes(svc, true);
+    let app = auth_routes(svc, true)
+        .layer(axum::Extension(api_adapters::axum::middleware::login_guard::LoginGuard::new()));
 
     let body = r#"{"username":"admin","password":"wrong"}"#;
     let resp = app

@@ -716,6 +716,7 @@ mod tests {
         let mut thread_mock = MockThreadRepository::new();
         thread_mock.expect_save().returning(|t| Ok(t.id));
         thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+        thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
         let mut post_mock = MockPostRepository::new();
         post_mock.expect_save().returning(|p| Ok((p.id, 1)));
@@ -861,6 +862,7 @@ mod tests {
         let mut thread_mock = MockThreadRepository::new();
         thread_mock.expect_save().returning(|t| Ok(t.id));
         thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+        thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
         let mut post_mock = MockPostRepository::new();
         post_mock
@@ -898,6 +900,7 @@ mod tests {
         let mut thread_mock = MockThreadRepository::new();
         thread_mock.expect_save().returning(|t| Ok(t.id));
         thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+        thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
         let mut post_mock = MockPostRepository::new();
         post_mock
@@ -966,6 +969,7 @@ mod tests {
         let mut thread_mock = MockThreadRepository::new();
         thread_mock.expect_save().returning(|t| Ok(t.id));
         thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+        thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
         let mut post_mock = MockPostRepository::new();
         post_mock.expect_save().returning(|p| Ok((p.id, 1)));
@@ -1141,6 +1145,7 @@ mod tests {
         let mut thread_mock = MockThreadRepository::new();
         thread_mock.expect_save().returning(|t| Ok(t.id));
         thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+        thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
         let mut post_mock = MockPostRepository::new();
         post_mock.expect_save().returning(|p| Ok((p.id, 1)));

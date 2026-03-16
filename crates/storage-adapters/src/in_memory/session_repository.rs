@@ -56,15 +56,17 @@ impl SessionRepository for InMemorySessionRepository {
     }
 
     async fn find_by_id(&self, session_id: &str) -> Result<Session, DomainError> {
-        match self.sessions.get(session_id) {
-            Some(s) if s.expires_at > Utc::now() => Ok(s.clone()),
-            Some(_) => {
-                // Expired — remove lazily
-                self.sessions.remove(session_id);
-                Err(DomainError::Auth)
-            }
-            None => Err(DomainError::Auth),
+        // Check expiry while holding the read guard, then drop it before any mutation.
+        let expired = match self.sessions.get(session_id) {
+            Some(s) if s.expires_at > Utc::now() => return Ok(s.clone()),
+            Some(_) => true,  // expired
+            None    => false, // not found
+        };
+        // Read guard is dropped here. Safe to call remove() without deadlocking.
+        if expired {
+            self.sessions.remove(session_id);
         }
+        Err(DomainError::Auth)
     }
 
     /// Removes the session from the map. Silently succeeds if the session does not exist.

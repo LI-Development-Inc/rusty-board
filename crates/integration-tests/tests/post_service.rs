@@ -93,6 +93,7 @@ async fn create_text_only_thread_succeeds() {
     let mut thread_mock = MockThreadRepository::new();
     thread_mock.expect_save().returning(|t| Ok(t.id));
     thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+    thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
     let mut post_mock = MockPostRepository::new();
     post_mock.expect_save().returning(|p| Ok((p.id, 1u64)));
@@ -328,6 +329,7 @@ async fn spam_filter_disabled_allows_high_score_body() {
     let mut thread_mock = MockThreadRepository::new();
     thread_mock.expect_save().returning(|t| Ok(t.id));
     thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+    thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
     let mut post_mock = MockPostRepository::new();
     post_mock.expect_save().returning(|p| Ok((p.id, 1u64)));
@@ -448,6 +450,7 @@ async fn forced_anon_erases_submitted_name() {
     let mut thread_mock = MockThreadRepository::new();
     thread_mock.expect_save().returning(|t| Ok(t.id));
     thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+    thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
     let mut post_mock = MockPostRepository::new();
     post_mock
@@ -485,6 +488,7 @@ async fn forced_anon_false_preserves_submitted_name() {
     let mut thread_mock = MockThreadRepository::new();
     thread_mock.expect_save().returning(|t| Ok(t.id));
     thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+    thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
     let mut post_mock = MockPostRepository::new();
     post_mock
@@ -522,6 +526,7 @@ async fn post_repo_error_propagates() {
     let mut thread_mock = MockThreadRepository::new();
     thread_mock.expect_save().returning(|t| Ok(t.id));
     thread_mock.expect_set_op_post().returning(|_, _| Ok(()));
+    thread_mock.expect_count_by_board().returning(|_| Ok(0));
 
     let mut post_mock = MockPostRepository::new();
     post_mock
@@ -593,6 +598,8 @@ async fn file_deduplication_reuses_existing_attachment_on_hash_match() {
     let mut thread_mock = MockThreadRepository::new();
     thread_mock.expect_find_by_id()
         .returning(move |_| Ok(open_thread(board_id, thread_id)));
+    // Reply below bump limit → thread gets bumped
+    thread_mock.expect_bump().returning(|_, _| Ok(()));
 
     let mut post_mock = MockPostRepository::new();
     post_mock.expect_find_recent_hashes().returning(|_, _| Ok(vec![]));
